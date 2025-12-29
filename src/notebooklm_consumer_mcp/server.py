@@ -721,12 +721,24 @@ def research_import(
 
         # Get sources from poll result
         all_sources = poll_result.get("sources", [])
+        report_content = poll_result.get("report", "")
 
         if not all_sources:
             return {
                 "status": "error",
                 "error": "No sources found in research results.",
             }
+
+        # Separate deep_report sources (type 5) from importable web/drive sources
+        # Deep reports will be imported as text sources, web sources imported normally
+        deep_report_source = None
+        web_sources = []
+
+        for src in all_sources:
+            if src.get("result_type") == 5:
+                deep_report_source = src
+            else:
+                web_sources.append(src)
 
         # Filter sources by indices if specified
         if source_indices is not None:
@@ -747,12 +759,30 @@ def research_import(
         else:
             sources_to_import = all_sources
 
-        # Import the sources
+        # Import web/drive sources (skip deep_report sources as they don't have URLs)
+        web_sources_to_import = [s for s in sources_to_import if s.get("result_type") != 5]
         imported = client.import_research_sources(
             notebook_id=notebook_id,
             task_id=task_id,
-            sources=sources_to_import,
+            sources=web_sources_to_import,
         )
+
+        # If deep research with report, import the report as a text source
+        if deep_report_source and report_content:
+            try:
+                report_result = client.add_text_source(
+                    notebook_id=notebook_id,
+                    title=deep_report_source.get("title", "Deep Research Report"),
+                    text=report_content,
+                )
+                if report_result:
+                    imported.append({
+                        "id": report_result.get("id"),
+                        "title": report_result.get("title", "Deep Research Report"),
+                    })
+            except Exception as e:
+                # Don't fail the entire import if report import fails
+                pass
 
         return {
             "status": "success",

@@ -1510,6 +1510,11 @@ class ConsumerNotebookLMClient:
             title = src.get("title", "Untitled")
             result_type = src.get("result_type", 1)
 
+            # Skip deep_report sources (type 5) - these are research reports, not importable sources
+            # Also skip sources with empty URLs
+            if result_type == 5 or not url:
+                continue
+
             if result_type == 1:
                 # Web source
                 source_data = [None, None, [url, title], None, None, None, None, None, None, None, 2]
