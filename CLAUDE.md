@@ -4,16 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**NotebookLM Consumer MCP Server** - Provides programmatic access to Consumer NotebookLM (notebooklm.google.com) using reverse-engineered internal APIs.
+**NotebookLM MCP Server** - Provides programmatic access to NotebookLM (notebooklm.google.com) using reverse-engineered internal APIs.
 
-**IMPORTANT:** This is for the **Consumer/Free tier** of NotebookLM, NOT NotebookLM Enterprise (Vertex AI). These are completely separate systems with different notebooks, different APIs, and different authentication.
-
-| Aspect | Consumer (this project) | Enterprise |
-|--------|------------------------|------------|
-| URL | notebooklm.google.com | vertexaisearch.cloud.google.com |
-| Auth | Browser cookies + CSRF | Google Cloud ADC |
-| API | Internal batchexecute RPC | Discovery Engine API |
-| Stability | Undocumented, may break | Official, documented |
+Tested with personal/free tier accounts. May work with Google Workspace accounts but has not been tested.
 
 ## Development Commands
 
@@ -25,7 +18,7 @@ uv tool install .
 uv cache clean && uv tool install --force .
 
 # Run the MCP server
-notebooklm-consumer-mcp
+notebooklm-mcp
 
 # Run tests
 uv run pytest
@@ -86,17 +79,17 @@ When API calls fail with auth errors, re-extract fresh cookies from Chrome DevTo
 ## Architecture
 
 ```
-src/notebooklm_consumer_mcp/
+src/notebooklm_mcp/
 ├── __init__.py      # Package version
 ├── server.py        # FastMCP server with tool definitions
 ├── api_client.py    # Internal API client (reverse-engineered)
 ├── auth.py          # Token caching and validation
-└── auth_cli.py      # CLI for Chrome-based auth (notebooklm-consumer-auth)
+└── auth_cli.py      # CLI for Chrome-based auth (notebooklm-mcp-auth)
 ```
 
 **Executables:**
-- `notebooklm-consumer-mcp` - The MCP server
-- `notebooklm-consumer-auth` - CLI for extracting tokens (requires closing Chrome)
+- `notebooklm-mcp` - The MCP server
+- `notebooklm-mcp-auth` - CLI for extracting tokens (requires closing Chrome)
 
 ## MCP Tools Provided
 

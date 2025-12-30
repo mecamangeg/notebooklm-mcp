@@ -1,4 +1,4 @@
-"""Authentication helper for NotebookLM Consumer.
+"""Authentication helper for NotebookLM MCP.
 
 Uses Chrome DevTools MCP to extract auth tokens from an authenticated browser session.
 If the user is not logged in, prompts them to log in via the Chrome window.
@@ -57,7 +57,7 @@ class AuthTokens:
 
 def get_cache_path() -> Path:
     """Get the path to the auth cache file."""
-    cache_dir = Path.home() / ".notebooklm-consumer"
+    cache_dir = Path.home() / ".notebooklm-mcp"
     cache_dir.mkdir(exist_ok=True)
     return cache_dir / "auth.json"
 
@@ -126,7 +126,7 @@ def extract_tokens_via_chrome_devtools() -> AuthTokens | None:
 
     raise NotImplementedError(
         "Direct Chrome DevTools extraction not implemented. "
-        "Use the 'notebooklm-consumer-auth' CLI command instead."
+        "Use the 'notebooklm-mcp-auth' CLI command instead."
     )
 
 
@@ -178,9 +178,9 @@ def extract_session_id_from_page(html: str) -> str | None:
 #
 # Usage:
 #   1. Make sure Chrome is open with DevTools MCP connected
-#   2. Run: notebooklm-consumer-auth
+#   2. Run: notebooklm-mcp-auth
 #   3. If not logged in, log in via the Chrome window
-#   4. Tokens are cached to ~/.notebooklm-consumer/auth.json
+#   4. Tokens are cached to ~/.notebooklm-mcp/auth.json
 #   5. Start the MCP server - it will use cached tokens
 #
 # The auth flow script is separate because:

@@ -1,15 +1,15 @@
-"""NotebookLM Consumer MCP Server."""
+"""NotebookLM MCP Server."""
 
 from typing import Any
 
 from fastmcp import FastMCP
 
-from .api_client import ConsumerNotebookLMClient, extract_cookies_from_chrome_export, parse_timestamp
+from .api_client import NotebookLMClient, extract_cookies_from_chrome_export, parse_timestamp
 
 # Initialize MCP server
 mcp = FastMCP(
-    name="notebooklm-consumer",
-    instructions="""NotebookLM Consumer MCP - Access Consumer NotebookLM (notebooklm.google.com), NOT Enterprise.
+    name="notebooklm",
+    instructions="""NotebookLM MCP - Access NotebookLM (notebooklm.google.com).
 
 **Auth:** Use save_auth_tokens with cookies from Chrome DevTools. CSRF/session auto-extracted.
 **Confirmation:** Tools with confirm param require user approval before setting confirm=True.
@@ -17,10 +17,10 @@ mcp = FastMCP(
 )
 
 # Global state
-_client: ConsumerNotebookLMClient | None = None
+_client: NotebookLMClient | None = None
 
 
-def get_client() -> ConsumerNotebookLMClient:
+def get_client() -> NotebookLMClient:
     """Get or create the API client.
 
     Tries environment variables first, falls back to cached tokens from auth CLI.
@@ -48,11 +48,11 @@ def get_client() -> ConsumerNotebookLMClient:
             else:
                 raise ValueError(
                     "No authentication found. Either:\n"
-                    "1. Run 'notebooklm-consumer-auth' to authenticate via Chrome, or\n"
+                    "1. Run 'notebooklm-mcp-auth' to authenticate via Chrome, or\n"
                     "2. Set NOTEBOOKLM_COOKIES environment variable manually"
                 )
 
-        _client = ConsumerNotebookLMClient(
+        _client = NotebookLMClient(
             cookies=cookies,
             csrf_token=csrf_token,
             session_id=session_id,

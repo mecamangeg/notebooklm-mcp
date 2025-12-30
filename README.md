@@ -1,10 +1,10 @@
-# NotebookLM Consumer MCP Server
+# NotebookLM MCP Server
 
 ![NotebookLM MCP Header](docs/media/header.jpeg)
 
-An MCP server for **Consumer NotebookLM** (notebooklm.google.com) - the free/personal tier.
+An MCP server for **NotebookLM** (notebooklm.google.com).
 
-> **Note:** This is NOT for NotebookLM Enterprise (Vertex AI). Those are completely separate systems.
+> **Note:** Tested with Pro/free tier accounts. May work with NotebookLM Enterprise accounts but has not been tested.
 
 ## Features
 
@@ -48,8 +48,8 @@ Use at your own risk for personal/experimental purposes.
 
 ```bash
 # Clone the repository
-git clone https://github.com/jacob-bd/notebooklm-consumer-mcp.git
-cd notebooklm-consumer-mcp
+git clone https://github.com/jacob-bd/notebooklm-mcp.git
+cd notebooklm-mcp
 
 # Install with uv
 uv tool install .
@@ -60,7 +60,7 @@ uv tool install .
 To update to the latest version:
 
 ```bash
-cd notebooklm-consumer-mcp
+cd notebooklm-mcp
 
 # Pull latest changes
 git pull
@@ -81,10 +81,10 @@ Before using the MCP, you need to authenticate with NotebookLM. Run:
 
 ```bash
 # Recommended: Auto mode (launches Chrome, you log in)
-notebooklm-consumer-auth
+notebooklm-mcp-auth
 
 # Alternative: File mode (manual cookie extraction)
-notebooklm-consumer-auth --file
+notebooklm-mcp-auth --file
 ```
 
 **Auto mode** launches a dedicated Chrome profile, you log in to Google, and cookies are extracted automatically. Your login persists for future auth refreshes.
@@ -97,9 +97,9 @@ For detailed instructions, troubleshooting, and how the authentication system wo
 
 ## MCP Configuration
 
-> **⚠️ Context Window Warning:** This MCP provides **31 tools** which consume a significant portion of your context window. It's recommended to **disable the MCP when not actively using NotebookLM** to preserve context for your other work. In Claude Code, use `@notebooklm-consumer` to toggle it on/off, or use `/mcp` command.
+> **⚠️ Context Window Warning:** This MCP provides **31 tools** which consume a significant portion of your context window. It's recommended to **disable the MCP when not actively using NotebookLM** to preserve context for your other work. In Claude Code, use `@notebooklm` to toggle it on/off, or use `/mcp` command.
 
-No environment variables needed - the MCP uses cached tokens from `~/.notebooklm-consumer/auth.json`.
+No environment variables needed - the MCP uses cached tokens from `~/.notebooklm-mcp/auth.json`.
 
 ### Claude Code (Recommended CLI Method)
 
@@ -107,12 +107,12 @@ Use the built-in CLI command to add the MCP server:
 
 **Add for all projects (recommended):**
 ```bash
-claude mcp add --scope user notebooklm-consumer notebooklm-consumer-mcp
+claude mcp add --scope user notebooklm notebooklm-mcp
 ```
 
 **Or add for current project only:**
 ```bash
-claude mcp add notebooklm-consumer notebooklm-consumer-mcp
+claude mcp add notebooklm notebooklm-mcp
 ```
 
 That's it! Restart Claude Code to use the MCP tools.
@@ -130,8 +130,8 @@ If you prefer to edit the config file manually, add to `~/.claude.json`:
 ```json
 {
   "mcpServers": {
-    "notebooklm-consumer": {
-      "command": "notebooklm-consumer-mcp"
+    "notebooklm": {
+      "command": "notebooklm-mcp"
     }
   }
 }
@@ -146,12 +146,12 @@ Restart Claude Code after editing.
 
 ```bash
 # On macOS/Linux:
-which notebooklm-consumer-mcp
+which notebooklm-mcp
 
 # On Windows:
-where notebooklm-consumer-mcp
+where notebooklm-mcp
 
-# Example output: /Users/yourname/.local/bin/notebooklm-consumer-mcp
+# Example output: /Users/yourname/.local/bin/notebooklm-mcp
 ```
 
 **Step 2:** Add to `~/.cursor/mcp.json` using the full path from Step 1:
@@ -159,8 +159,8 @@ where notebooklm-consumer-mcp
 ```json
 {
   "mcpServers": {
-    "notebooklm-consumer": {
-      "command": "/Users/yourname/.local/bin/notebooklm-consumer-mcp",
+    "notebooklm": {
+      "command": "/Users/yourname/.local/bin/notebooklm-mcp",
       "args": []
     }
   }
@@ -175,19 +175,19 @@ where notebooklm-consumer-mcp
 
 ```bash
 # On macOS/Linux:
-which notebooklm-consumer-mcp
+which notebooklm-mcp
 
 # On Windows:
-where notebooklm-consumer-mcp
+where notebooklm-mcp
 
-# Example output: /Users/yourname/.local/bin/notebooklm-consumer-mcp
+# Example output: /Users/yourname/.local/bin/notebooklm-mcp
 ```
 
 **Step 2:** Add to `~/.gemini/settings.json` under `mcpServers` using the full path from Step 1:
 
 ```json
-"notebooklm-consumer": {
-  "command": "/Users/yourname/.local/bin/notebooklm-consumer-mcp",
+"notebooklm": {
+  "command": "/Users/yourname/.local/bin/notebooklm-mcp",
   "args": []
 }
 ```
@@ -201,7 +201,7 @@ Since this MCP has 31 tools, it's good practice to disable it when not in use:
 **Claude Code:**
 ```bash
 # Toggle on/off by @-mentioning in chat
-@notebooklm-consumer
+@notebooklm
 
 # Or use the /mcp command to enable/disable
 /mcp
@@ -366,19 +366,6 @@ studio_delete(
 **Video Formats:** explainer, brief
 **Video Styles:** auto_select, classic, whiteboard, kawaii, anime, watercolor, retro_print, heritage, paper_craft
 
-## Consumer vs Enterprise
-
-| Feature | Consumer | Enterprise |
-|---------|----------|------------|
-| URL | notebooklm.google.com | vertexaisearch.cloud.google.com |
-| Auth | Browser cookies | Google Cloud ADC |
-| API | Internal RPCs | Discovery Engine API |
-| Notebooks | Personal | Separate system |
-| Audio Overviews | Yes | Yes |
-| Video Overviews | Yes | No |
-| Mind Maps | Yes | No |
-| Flashcards/Quizzes | Yes | No |
-
 ## Authentication Lifecycle
 
 | Component | Duration | Refresh |
@@ -448,7 +435,7 @@ See [CLAUDE.md](CLAUDE.md) for detailed API documentation and how to add new fea
 
 Full transparency: this project was built by a non-developer using AI coding assistants. If you're an experienced Python developer, you might look at this codebase and wince. That's okay.
 
-The goal here was to scratch an itch - programmatic access to Consumer NotebookLM - and learn along the way. The code works, but it's likely missing patterns, optimizations, or elegance that only years of experience can provide.
+The goal here was to scratch an itch - programmatic access to NotebookLM - and learn along the way. The code works, but it's likely missing patterns, optimizations, or elegance that only years of experience can provide.
 
 **This is where you come in.** If you see something that makes you cringe, please consider contributing rather than just closing the tab. This is open source specifically because human expertise is irreplaceable. Whether it's refactoring, better error handling, type hints, or architectural guidance - PRs and issues are welcome.
 

@@ -1,6 +1,6 @@
 # Known Issues and Fragility
 
-This document describes known limitations and potential failure points in the NotebookLM Consumer MCP. Since this project uses reverse-engineered internal APIs, certain breakages are expected over time.
+This document describes known limitations and potential failure points in the NotebookLM MCP. Since this project uses reverse-engineered internal APIs, certain breakages are expected over time.
 
 ---
 
@@ -46,15 +46,15 @@ Cookies typically expire after 2-4 weeks. Symptoms:
 ### How to fix
 Re-extract fresh cookies using one of these methods:
 
-**Option A: notebooklm-consumer-auth CLI (recommended)**
+**Option A: notebooklm-mcp-auth CLI (recommended)**
 
 The built-in authentication CLI automatically launches Chrome, navigates to NotebookLM, and extracts cookies:
 
 ```bash
-notebooklm-consumer-auth
+notebooklm-mcp-auth
 ```
 
-If Chrome is not running, it will be launched automatically. If you're not logged in, the CLI waits for you to complete login in the browser window. Tokens are cached to `~/.notebooklm-consumer/auth.json`.
+If Chrome is not running, it will be launched automatically. If you're not logged in, the CLI waits for you to complete login in the browser window. Tokens are cached to `~/.notebooklm-mcp/auth.json`.
 
 **Option B: Chrome DevTools MCP**
 
@@ -125,7 +125,7 @@ The MCP auto-extracts CSRF token (`SNlM0e`) and session ID (`FdrFJe`) from the N
 
 ### Symptoms
 - `ValueError: Could not extract CSRF token from page`
-- Debug HTML saved to `~/.notebooklm-consumer/debug_page.html`
+- Debug HTML saved to `~/.notebooklm-mcp/debug_page.html`
 
 ### How to fix
 If auto-extraction fails:

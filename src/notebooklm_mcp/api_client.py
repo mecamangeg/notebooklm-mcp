@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Consumer NotebookLM API client (notebooklm.google.com).
+"""NotebookLM MCP API client (notebooklm.google.com).
 
 Reverse-engineered internal API. See CLAUDE.md for full documentation.
 """
@@ -51,8 +51,8 @@ def parse_timestamp(ts_array: list | None) -> str | None:
 
 
 @dataclass
-class ConsumerNotebook:
-    """Represents a consumer NotebookLM notebook."""
+class Notebook:
+    """Represents a NotebookLM notebook."""
 
     id: str
     title: str
@@ -75,8 +75,8 @@ class ConsumerNotebook:
         return "shared_with_me"
 
 
-class ConsumerNotebookLMClient:
-    """Client for consumer NotebookLM internal API."""
+class NotebookLMClient:
+    """Client for NotebookLM MCP internal API."""
 
     BASE_URL = "https://notebooklm.google.com"
     BATCHEXECUTE_URL = f"{BASE_URL}/_/LabsTailwindUi/data/batchexecute"
@@ -274,7 +274,7 @@ class ConsumerNotebookLMClient:
             if not csrf_match:
                 # Save HTML for debugging
                 from pathlib import Path
-                debug_dir = Path.home() / ".notebooklm-consumer"
+                debug_dir = Path.home() / ".notebooklm-mcp"
                 debug_dir.mkdir(exist_ok=True)
                 debug_path = debug_dir / "debug_page.html"
                 debug_path.write_text(html)
@@ -526,7 +526,7 @@ class ConsumerNotebookLMClient:
     # Notebook Operations
     # =========================================================================
 
-    def list_notebooks(self, debug: bool = False) -> list[ConsumerNotebook]:
+    def list_notebooks(self, debug: bool = False) -> list[Notebook]:
         """List all notebooks."""
         client = self._get_client()
 
@@ -615,7 +615,7 @@ class ConsumerNotebookLMClient:
                                 })
 
                     if notebook_id:
-                        notebooks.append(ConsumerNotebook(
+                        notebooks.append(Notebook(
                             id=notebook_id,
                             title=title,
                             source_count=len(sources),
@@ -686,14 +686,14 @@ class ConsumerNotebookLMClient:
             "keywords": keywords,
         }
 
-    def create_notebook(self, title: str = "") -> ConsumerNotebook | None:
+    def create_notebook(self, title: str = "") -> Notebook | None:
         """Create a new notebook."""
         params = [title, None, None, [2], [1, None, None, None, None, None, None, None, None, None, [1]]]
         result = self._call_rpc(self.RPC_CREATE_NOTEBOOK, params)
         if result and isinstance(result, list) and len(result) >= 3:
             notebook_id = result[2]
             if notebook_id:
-                return ConsumerNotebook(
+                return Notebook(
                     id=notebook_id,
                     title=title or "Untitled notebook",
                     source_count=0,
@@ -2624,7 +2624,7 @@ def extract_cookies_from_chrome_export(cookie_header: str) -> dict[str, str]:
 if __name__ == "__main__":
     import sys
 
-    print("Consumer NotebookLM API POC")
+    print("NotebookLM MCP API POC")
     print("=" * 50)
     print()
     print("To use this POC, you need to:")
@@ -2634,7 +2634,7 @@ if __name__ == "__main__":
     print("4. Copy the entire Cookie header value")
     print()
     print("Then run:")
-    print("  python consumer_notebooklm.py 'YOUR_COOKIE_HEADER'")
+    print("  python notebooklm_mcp.py 'YOUR_COOKIE_HEADER'")
     print()
 
     if len(sys.argv) > 1:
@@ -2670,7 +2670,7 @@ if __name__ == "__main__":
         print(f"Using session ID: {session_id}")
         print()
 
-        client = ConsumerNotebookLMClient(cookies, csrf_token=csrf_token, session_id=session_id)
+        client = NotebookLMClient(cookies, csrf_token=csrf_token, session_id=session_id)
 
         try:
             # Demo: List notebooks

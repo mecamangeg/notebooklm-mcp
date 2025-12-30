@@ -1,10 +1,10 @@
 # Authentication Guide
 
-This guide explains how to authenticate with NotebookLM Consumer MCP.
+This guide explains how to authenticate with NotebookLM MCP.
 
 ## Overview
 
-NotebookLM Consumer uses browser cookies for authentication (there is no official API). The `notebooklm-consumer-auth` CLI tool extracts these cookies and caches them for the MCP server to use.
+NotebookLM MCP uses browser cookies for authentication (there is no official API). The `notebooklm-mcp-auth` CLI tool extracts these cookies and caches them for the MCP server to use.
 
 **Two authentication methods are available:**
 
@@ -30,7 +30,7 @@ This method launches Chrome automatically and extracts cookies after you log in.
 # 1. Close Chrome completely (Cmd+Q on Mac, or quit from taskbar)
 
 # 2. Run the auth command
-notebooklm-consumer-auth
+notebooklm-mcp-auth
 
 # 3. Log in to your Google account in the browser window that opens
 
@@ -39,7 +39,7 @@ notebooklm-consumer-auth
 
 ### What Happens Behind the Scenes
 
-1. A dedicated Chrome profile is created at `~/.notebooklm-consumer/chrome-profile/`
+1. A dedicated Chrome profile is created at `~/.notebooklm-mcp/chrome-profile/`
 2. Chrome launches with remote debugging enabled
 3. You log in to NotebookLM via the browser
 4. Cookies and CSRF token are extracted and cached
@@ -66,10 +66,10 @@ This method lets you manually extract and provide cookies. Use this if:
 
 ```bash
 # Option A: Interactive mode (shows instructions, prompts for file path)
-notebooklm-consumer-auth --file
+notebooklm-mcp-auth --file
 
 # Option B: Direct file path
-notebooklm-consumer-auth --file /path/to/cookies.txt
+notebooklm-mcp-auth --file /path/to/cookies.txt
 ```
 
 ### How to Extract Cookies Manually
@@ -106,7 +106,7 @@ SID=abc123...; HSID=xyz789...; SSID=...; APISID=...; SAPISID=...; __Secure-1PSID
 Authentication tokens are cached at:
 
 ```
-~/.notebooklm-consumer/auth.json
+~/.notebooklm-mcp/auth.json
 ```
 
 This file contains:
@@ -118,7 +118,7 @@ This file contains:
 The dedicated Chrome profile (for auto mode) is stored at:
 
 ```
-~/.notebooklm-consumer/chrome-profile/
+~/.notebooklm-mcp/chrome-profile/
 ```
 
 ---
@@ -129,20 +129,20 @@ Once authenticated, add the MCP to your AI tool:
 
 **Claude Code:**
 ```bash
-claude mcp add notebooklm-consumer-mcp -- notebooklm-consumer-mcp
+claude mcp add notebooklm-mcp -- notebooklm-mcp
 ```
 
 **Gemini CLI:**
 ```bash
-gemini mcp add notebooklm-consumer notebooklm-consumer-mcp
+gemini mcp add notebooklm notebooklm-mcp
 ```
 
 **Manual (settings.json):**
 ```json
 {
   "mcpServers": {
-    "notebooklm-consumer-mcp": {
-      "command": "notebooklm-consumer-mcp"
+    "notebooklm-mcp": {
+      "command": "notebooklm-mcp"
     }
   }
 }
@@ -158,7 +158,7 @@ Then restart your AI assistant.
 - **CSRF token:** Auto-refreshed on each MCP client initialization
 - **Session ID:** Auto-refreshed on each MCP client initialization
 
-When you start seeing authentication errors, simply run `notebooklm-consumer-auth` again to refresh.
+When you start seeing authentication errors, simply run `notebooklm-mcp-auth` again to refresh.
 
 ---
 
@@ -172,7 +172,7 @@ Close Chrome completely and try again. On Mac, use **Cmd+Q** to fully quit.
 
 Try file mode instead:
 ```bash
-notebooklm-consumer-auth --file
+notebooklm-mcp-auth --file
 ```
 
 ### "401 Unauthorized" or "403 Forbidden" errors
@@ -183,7 +183,7 @@ Your cookies have expired. Run the auth command again to refresh.
 
 Some Chrome extensions or tools modify Chrome's behavior. Use file mode:
 ```bash
-notebooklm-consumer-auth --file
+notebooklm-mcp-auth --file
 ```
 
 ### Cookie file shows "missing required cookies"
@@ -196,7 +196,7 @@ Make sure you copied the cookie **value**, not the header name. The value should
 
 Chrome version 136 and later restrict remote debugging on the default profile for security reasons. This MCP works around this by:
 
-1. Using a dedicated profile directory (`~/.notebooklm-consumer/chrome-profile/`)
+1. Using a dedicated profile directory (`~/.notebooklm-mcp/chrome-profile/`)
 2. Adding the `--remote-allow-origins=*` flag for WebSocket connections
 
 This is handled automatically - no action required from users.
@@ -205,7 +205,7 @@ This is handled automatically - no action required from users.
 
 ## Security Notes
 
-- Cookies are stored locally in `~/.notebooklm-consumer/auth.json`
+- Cookies are stored locally in `~/.notebooklm-mcp/auth.json`
 - The dedicated Chrome profile contains your Google login for NotebookLM
 - Never share your `auth.json` file or commit it to version control
 - The `cookies.txt` file in the repo is a template - don't commit real cookies

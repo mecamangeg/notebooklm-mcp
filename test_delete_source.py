@@ -2,8 +2,8 @@
 """Test script for delete_source method."""
 
 import sys
-from src.notebooklm_consumer_mcp.api_client import ConsumerNotebookLMClient
-from src.notebooklm_consumer_mcp.auth import load_cached_tokens
+from src.notebooklm_mcp.api_client import NotebookLMClient
+from src.notebooklm_mcp.auth import load_cached_tokens
 
 def main():
     # Load credentials from cache
@@ -13,7 +13,7 @@ def main():
         return 1
 
     # Initialize client
-    client = ConsumerNotebookLMClient(
+    client = NotebookLMClient(
         cookies=tokens.cookies,
         csrf_token=tokens.csrf_token,
         session_id=tokens.session_id,

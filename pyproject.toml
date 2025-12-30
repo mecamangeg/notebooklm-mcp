@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "notebooklm-consumer-mcp"
+name = "notebooklm-mcp"
 version = "0.1.0"
-description = "MCP server for Consumer NotebookLM (notebooklm.google.com) - Personal/Free tier"
+description = "MCP server for NotebookLM (notebooklm.google.com)"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -33,8 +33,8 @@ dev = [
 ]
 
 [project.scripts]
-notebooklm-consumer-mcp = "notebooklm_consumer_mcp.server:main"
-notebooklm-consumer-auth = "notebooklm_consumer_mcp.auth_cli:main"
+notebooklm-mcp = "notebooklm_mcp.server:main"
+notebooklm-mcp-auth = "notebooklm_mcp.auth_cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/notebooklm_consumer_mcp"]
+packages = ["src/notebooklm_mcp"]

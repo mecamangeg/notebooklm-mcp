@@ -1,4 +1,4 @@
-# NotebookLM Consumer MCP - Comprehensive Test Plan
+# NotebookLM MCP - Comprehensive Test Plan
 
 **Purpose:** Verify all 31 MCP tools work correctly after optimization.
 

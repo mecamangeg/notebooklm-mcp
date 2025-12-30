@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI tool to authenticate with NotebookLM Consumer.
+"""CLI tool to authenticate with NotebookLM MCP.
 
 This tool connects to Chrome via DevTools Protocol, navigates to NotebookLM,
 and extracts authentication tokens. If the user is not logged in, it waits
@@ -12,11 +12,11 @@ Usage:
     2. Or, if Chrome is already running, it may already have debugging enabled.
 
     3. Run this tool:
-       notebooklm-consumer-auth
+       notebooklm-mcp-auth
 
     4. If not logged in, log in via the Chrome window
 
-    5. Tokens are cached to ~/.notebooklm-consumer/auth.json
+    5. Tokens are cached to ~/.notebooklm-mcp/auth.json
 """
 
 import json
@@ -85,7 +85,7 @@ def launch_chrome(port: int, headless: bool = False) -> bool:
 
     # Chrome 136+ requires a non-default user-data-dir for remote debugging
     # We use a persistent directory so Google login is remembered across runs
-    profile_dir = Path.home() / ".notebooklm-consumer" / "chrome-profile"
+    profile_dir = Path.home() / ".notebooklm-mcp" / "chrome-profile"
     profile_dir.mkdir(parents=True, exist_ok=True)
 
     args = [
@@ -273,7 +273,7 @@ def is_chrome_profile_locked(profile_dir: str | None = None) -> bool:
 
     Args:
         profile_dir: The profile directory to check. If None, checks our
-                     notebooklm-consumer profile, NOT the default Chrome profile.
+                     notebooklm-mcp profile, NOT the default Chrome profile.
 
     This is more reliable than process detection because:
     - Works across all platforms
@@ -283,7 +283,7 @@ def is_chrome_profile_locked(profile_dir: str | None = None) -> bool:
     if profile_dir is None:
         # Check OUR profile, not the default Chrome profile
         # We use a separate profile so we can run alongside the user's main Chrome
-        profile_dir = str(Path.home() / ".notebooklm-consumer" / "chrome-profile")
+        profile_dir = str(Path.home() / ".notebooklm-mcp" / "chrome-profile")
 
     # Chrome creates a "SingletonLock" file when the profile is in use
     lock_file = Path(profile_dir) / "SingletonLock"
@@ -293,7 +293,7 @@ def is_chrome_profile_locked(profile_dir: str | None = None) -> bool:
 def is_our_chrome_profile_in_use() -> bool:
     """Check if OUR Chrome profile is already in use.
 
-    We use a separate profile at ~/.notebooklm-consumer/chrome-profile
+    We use a separate profile at ~/.notebooklm-mcp/chrome-profile
     so we can run alongside the user's main Chrome browser.
 
     This only checks if our specific profile is locked, NOT if Chrome
@@ -309,7 +309,7 @@ def run_auth_flow(port: int = CDP_DEFAULT_PORT, auto_launch: bool = True) -> Aut
         port: Chrome DevTools port
         auto_launch: If True, automatically launch Chrome if not running
     """
-    print("NotebookLM Consumer Authentication")
+    print("NotebookLM MCP Authentication")
     print("=" * 40)
     print()
 
@@ -324,7 +324,7 @@ def run_auth_flow(port: int = CDP_DEFAULT_PORT, auto_launch: bool = True) -> Aut
             print("This means a previous auth Chrome window is still open.")
             print("Close that window and try again, or use file mode:")
             print()
-            print("  notebooklm-consumer-auth --file")
+            print("  notebooklm-mcp-auth --file")
             print()
             return None
 
@@ -346,7 +346,7 @@ def run_auth_flow(port: int = CDP_DEFAULT_PORT, auto_launch: bool = True) -> Aut
         print("  - Firewall is blocking the port")
         print()
         print("TRY: Use file mode instead (most reliable):")
-        print("     notebooklm-consumer-auth --file")
+        print("     notebooklm-mcp-auth --file")
         print()
         return None
 
@@ -456,13 +456,13 @@ def run_auth_flow(port: int = CDP_DEFAULT_PORT, auto_launch: bool = True) -> Aut
     print("  1. Add the MCP to your AI tool (if not already done):")
     print()
     print("     Claude Code:")
-    print("       claude mcp add notebooklm-consumer-mcp -- notebooklm-consumer-mcp")
+    print("       claude mcp add notebooklm-mcp -- notebooklm-mcp")
     print()
     print("     Gemini CLI:")
-    print("       gemini mcp add notebooklm-consumer notebooklm-consumer-mcp")
+    print("       gemini mcp add notebooklm notebooklm-mcp")
     print()
     print("     Or add to settings.json manually:")
-    print('       "notebooklm-consumer-mcp": { "command": "notebooklm-consumer-mcp" }')
+    print('       "notebooklm-mcp": { "command": "notebooklm-mcp" }')
     print()
     print("  2. Restart your AI assistant")
     print()
@@ -482,7 +482,7 @@ def run_file_cookie_entry(cookie_file: str | None = None) -> AuthTokens | None:
         cookie_file: Optional path to file. If not provided, shows instructions
                      and prompts for the path.
     """
-    print("NotebookLM Consumer - Cookie File Import")
+    print("NotebookLM MCP - Cookie File Import")
     print("=" * 50)
     print()
 
@@ -598,13 +598,13 @@ def run_file_cookie_entry(cookie_file: str | None = None) -> AuthTokens | None:
     print("  1. Add the MCP to your AI tool (if not already done):")
     print()
     print("     Claude Code:")
-    print("       claude mcp add notebooklm-consumer-mcp -- notebooklm-consumer-mcp")
+    print("       claude mcp add notebooklm-mcp -- notebooklm-mcp")
     print()
     print("     Gemini CLI:")
-    print("       gemini mcp add notebooklm-consumer notebooklm-consumer-mcp")
+    print("       gemini mcp add notebooklm notebooklm-mcp")
     print()
     print("     Or add to settings.json manually:")
-    print('       "notebooklm-consumer-mcp": { "command": "notebooklm-consumer-mcp" }')
+    print('       "notebooklm-mcp": { "command": "notebooklm-mcp" }')
     print()
     print("  2. Restart your AI assistant")
     print()
@@ -619,9 +619,9 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Authenticate with NotebookLM Consumer",
+        description="Authenticate with NotebookLM MCP",
         epilog="""
-This tool extracts authentication tokens from Chrome for use with the NotebookLM Consumer MCP.
+This tool extracts authentication tokens from Chrome for use with the NotebookLM MCP.
 
 TWO MODES:
 
@@ -636,11 +636,11 @@ TWO MODES:
    - May not work on all systems
 
 EXAMPLES:
-  notebooklm-consumer-auth --file               # Guided file import (recommended)
-  notebooklm-consumer-auth --file ~/cookies.txt # Direct file import
-  notebooklm-consumer-auth                      # Auto mode (close Chrome first)
+  notebooklm-mcp-auth --file               # Guided file import (recommended)
+  notebooklm-mcp-auth --file ~/cookies.txt # Direct file import
+  notebooklm-mcp-auth                      # Auto mode (close Chrome first)
 
-After authentication, start the MCP server with: notebooklm-consumer-mcp
+After authentication, start the MCP server with: notebooklm-mcp
         """
     )
     parser.add_argument(

@@ -2,11 +2,11 @@
 
 ## Project Overview
 
-**NotebookLM Consumer MCP Server**
+**NotebookLM MCP Server**
 
-This project implements a Model Context Protocol (MCP) server that provides programmatic access to the **Consumer (Free) tier** of [NotebookLM](https://notebooklm.google.com). It allows AI agents and developers to interact with NotebookLM notebooks, sources, and query capabilities.
+This project implements a Model Context Protocol (MCP) server that provides programmatic access to [NotebookLM](https://notebooklm.google.com). It allows AI agents and developers to interact with NotebookLM notebooks, sources, and query capabilities.
 
-**Crucial Distinction:** This is for the personal/consumer version, *not* the Enterprise/Vertex AI version. It relies on reverse-engineered internal APIs (`batchexecute` RPCs).
+Tested with personal/free tier accounts. May work with Google Workspace accounts but has not been tested. This project relies on reverse-engineered internal APIs (`batchexecute` RPCs).
 
 ## Environment & Setup
 
@@ -21,8 +21,8 @@ The project uses `uv` for dependency management and tool installation.
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/notebooklm-consumer-mcp.git
-cd notebooklm-consumer-mcp
+git clone https://github.com/YOUR_USERNAME/notebooklm-mcp.git
+cd notebooklm-mcp
 
 # Install as a tool (makes executables available)
 uv tool install .
@@ -61,7 +61,7 @@ uv tool install --force .
 
 **Running the Server:**
 ```bash
-notebooklm-consumer-mcp
+notebooklm-mcp
 ```
 
 ### Testing
@@ -77,11 +77,11 @@ uv run pytest tests/test_api_client.py
 
 ## Project Structure
 
-- `src/notebooklm_consumer_mcp/`
+- `src/notebooklm_mcp/`
     - `server.py`: Main entry point. Defines the MCP server and tools.
     - `api_client.py`: The core logic. Contains the reverse-engineered API calls.
     - `auth.py`: Handles token validation, storage, and loading.
-    - `auth_cli.py`: Implementation of the `notebooklm-consumer-auth` CLI.
+    - `auth_cli.py`: Implementation of the `notebooklm-mcp-auth` CLI.
 - `CLAUDE.md`: Contains detailed documentation on the reverse-engineered RPC IDs and protocol specifics. **Refer to this file for API deep dives.**
 - `pyproject.toml`: Project configuration and dependencies.
 

@@ -1,4 +1,4 @@
-# NotebookLM Consumer API Reference
+# NotebookLM MCP API Reference
 
 This document contains detailed API documentation for the reverse-engineered NotebookLM internal APIs. Only read this file when debugging API issues or adding new features.
 
