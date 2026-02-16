@@ -2503,6 +2503,253 @@ def notebook_digest_pipeline(
     }
 
 
+@mcp.tool()
+def notebook_digest_multi(
+    notebook_ids: list[str],
+    file_paths: list[str],
+    output_dir: str,
+    query_template: str = DEFAULT_DIGEST_QUERY,
+    batch_size: int = 3,
+    max_retries: int = 2,
+    delay: float = 1.0,
+) -> dict[str, Any]:
+    """Distribute files across MULTIPLE notebooks for maximum parallel throughput.
+
+    Each notebook processes its share of files concurrently — true parallelism
+    with zero contention since each thread targets a different notebook.
+
+    For N notebooks and F files:
+      - Each notebook gets ceil(F/N) files
+      - All notebooks process their batch simultaneously
+      - Speedup: ~Nx compared to single notebook
+
+    Example: 9 files across 3 notebooks
+      Notebook-1: add 3 files → batch query → save 3 digests  ─┐
+      Notebook-2: add 3 files → batch query → save 3 digests  ─┤ all concurrent
+      Notebook-3: add 3 files → batch query → save 3 digests  ─┘
+      Total: ~25s instead of ~90s (3.6x speedup)
+
+    Args:
+        notebook_ids: List of notebook UUIDs to distribute work across
+        file_paths: List of absolute file paths to process
+        output_dir: Directory to save digest .md files
+        query_template: Query template (default: Madera case digest)
+        batch_size: Cases per query within each notebook (default: 3)
+        max_retries: Retry attempts per batch (default: 2)
+        delay: Seconds between staggered starts (default: 1.0)
+    """
+    import math
+    import os
+    import re
+    import time
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if not file_paths:
+        return {"status": "error", "error": "No file paths provided"}
+    if not notebook_ids:
+        return {"status": "error", "error": "No notebook IDs provided"}
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    try:
+        client = get_client()
+    except Exception as e:
+        return {"status": "error", "error": f"Auth failed: {e}"}
+
+    n_notebooks = len(notebook_ids)
+    n_files = len(file_paths)
+    chunk_size = math.ceil(n_files / n_notebooks)
+
+    # Split files into per-notebook chunks
+    notebook_chunks = []
+    for i in range(n_notebooks):
+        start = i * chunk_size
+        end = min(start + chunk_size, n_files)
+        if start < n_files:
+            notebook_chunks.append({
+                "notebook_id": notebook_ids[i],
+                "file_paths": file_paths[start:end],
+                "notebook_index": i,
+            })
+
+    def _process_notebook_chunk(chunk):
+        """Process a chunk of files in a single notebook."""
+        nb_id = chunk["notebook_id"]
+        paths = chunk["file_paths"]
+        nb_idx = chunk["notebook_index"]
+        chunk_results = []
+
+        # Phase 1: Add all files as sources
+        source_entries = []
+        for path in paths:
+            title = os.path.splitext(os.path.basename(path))[0]
+            safe_title = "".join(
+                c if c.isalnum() or c in " .-_()," else "_"
+                for c in title
+            ).strip() or f"digest_{nb_idx}"
+            output_path = os.path.join(output_dir, f"{safe_title}-case-digest.md")
+
+            # Resume: skip existing
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 100:
+                chunk_results.append({
+                    "title": title, "path": path, "output_path": output_path,
+                    "status": "skipped", "output_size": os.path.getsize(output_path),
+                    "notebook_index": nb_idx,
+                })
+                continue
+
+            if not os.path.exists(path):
+                chunk_results.append({
+                    "title": title, "path": path, "status": "failed",
+                    "error": f"File not found", "notebook_index": nb_idx,
+                })
+                continue
+
+            try:
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        text = f.read()
+                except UnicodeDecodeError:
+                    with open(path, "r", encoding="latin-1") as f:
+                        text = f.read()
+
+                if not text.strip():
+                    chunk_results.append({
+                        "title": title, "path": path, "status": "skipped",
+                        "error": "File is empty", "notebook_index": nb_idx,
+                    })
+                    continue
+
+                add_result = client.add_text_source(nb_id, text=text, title=title)
+                if not add_result:
+                    chunk_results.append({
+                        "title": title, "path": path, "status": "failed",
+                        "error": "Failed to add source", "notebook_index": nb_idx,
+                    })
+                    continue
+
+                source_entries.append({
+                    "title": title, "path": path, "output_path": output_path,
+                    "source_id": add_result.get("id"),
+                    "input_size": len(text.encode("utf-8")),
+                    "notebook_index": nb_idx,
+                })
+            except Exception as e:
+                chunk_results.append({
+                    "title": title, "path": path, "status": "failed",
+                    "error": str(e), "notebook_index": nb_idx,
+                })
+
+        if not source_entries:
+            return chunk_results
+
+        # Phase 2: Query in batches within this notebook
+        for b in range(0, len(source_entries), batch_size):
+            batch = source_entries[b:b + batch_size]
+            source_ids = [e["source_id"] for e in batch]
+
+            # Build query
+            if len(batch) == 1:
+                query_text = query_template
+            else:
+                case_list = "\n".join(f"- {e['title']}" for e in batch)
+                query_text = (
+                    f"Write separate case digests for each of the following cases. "
+                    f"Use a clear separator (a line of dashes: ---) between each digest.\n\n"
+                    f"Cases:\n{case_list}\n\n"
+                    f"For EACH case, follow this format:\n{query_template}"
+                )
+
+            # Query with retry
+            answer = None
+            last_error = None
+            for attempt in range(1, max_retries + 1):
+                try:
+                    result = client.query(nb_id, query_text=query_text, source_ids=source_ids)
+                    if result and result.get("answer"):
+                        answer = result["answer"]
+                        break
+                    last_error = "No answer"
+                    if attempt < max_retries:
+                        time.sleep(2)
+                except Exception as e:
+                    last_error = str(e)
+                    if attempt < max_retries:
+                        time.sleep(2)
+
+            if not answer:
+                for entry in batch:
+                    chunk_results.append({
+                        **entry, "status": "partial",
+                        "error": f"Query failed: {last_error}",
+                    })
+                continue
+
+            # Split and save
+            if len(batch) == 1:
+                digests = [answer]
+            else:
+                parts = re.split(r'\n-{3,}\n|\n={3,}\n|\n\*{3,}\n', answer)
+                parts = [p.strip() for p in parts if p.strip() and len(p.strip()) > 100]
+                if len(parts) != len(batch):
+                    # Fallback: split on I. CAPTION
+                    parts2 = re.split(
+                        r'(?=\*{0,2}I\.\s*CAPTION\*{0,2})', answer, flags=re.IGNORECASE
+                    )
+                    parts2 = [p.strip() for p in parts2 if p.strip() and len(p.strip()) > 100]
+                    if len(parts2) == len(batch):
+                        parts = parts2
+                digests = parts if parts else [answer]
+
+            for j, entry in enumerate(batch):
+                if j < len(digests):
+                    try:
+                        with open(entry["output_path"], "w", encoding="utf-8") as f:
+                            f.write(digests[j])
+                        chunk_results.append({
+                            **entry, "status": "success",
+                            "output_size": len(digests[j].encode("utf-8")),
+                        })
+                    except Exception as e:
+                        chunk_results.append({
+                            **entry, "status": "partial", "error": f"Save failed: {e}",
+                        })
+                else:
+                    chunk_results.append({
+                        **entry, "status": "partial",
+                        "error": f"Split mismatch ({len(digests)} vs {len(batch)})",
+                    })
+
+        return chunk_results
+
+    # Execute all notebook chunks in parallel
+    all_results = []
+    with ThreadPoolExecutor(max_workers=n_notebooks) as executor:
+        futures = {}
+        for i, chunk in enumerate(notebook_chunks):
+            if i > 0:
+                time.sleep(delay)
+            future = executor.submit(_process_notebook_chunk, chunk)
+            futures[future] = i
+
+        for future in as_completed(futures):
+            all_results.extend(future.result())
+
+    success = sum(1 for r in all_results if r.get("status") == "success")
+    skipped = sum(1 for r in all_results if r.get("status") == "skipped")
+
+    return {
+        "status": "success" if (success + skipped) == n_files else "partial",
+        "summary": {
+            "total": n_files,
+            "notebooks_used": len(notebook_chunks),
+            "digests_saved": success + skipped,
+            "skipped": skipped,
+            "failed": n_files - success - skipped,
+        },
+        "results": all_results,
+    }
+
 def main():
     """Run the MCP server."""
     mcp.run()
