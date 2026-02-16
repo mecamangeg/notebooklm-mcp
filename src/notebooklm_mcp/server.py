@@ -2607,6 +2607,24 @@ def notebook_digest_multi(
         except Exception:
             return False
 
+    # ── Shared progress tracking (thread-safe) ──
+    import threading
+    import re as _re
+    import sys
+    _progress_lock = threading.Lock()
+    _progress = {"done": 0, "success": 0, "failed": 0, "skipped": 0}
+    _progress_log = []  # timestamped log entries
+    _start_time = time.time()
+    _total_queries = {"count": 0}  # mutable for closure access
+
+    def _log_progress(msg):
+        """Thread-safe progress logger."""
+        elapsed = time.time() - _start_time
+        entry = f"[{elapsed:6.1f}s] {msg}"
+        with _progress_lock:
+            _progress_log.append(entry)
+        print(entry, file=sys.stderr, flush=True)
+
     def _process_notebook_chunk(chunk):
         """Process a chunk of files in a single notebook using LIFO source management.
 
@@ -2618,6 +2636,7 @@ def notebook_digest_multi(
         nb_idx = chunk["notebook_index"]
         chunk_results = []
         sources_deleted = 0
+        nb_queries = 0
 
         # Pre-filter: compute titles/paths, skip already-done files
         pending = []
@@ -2674,21 +2693,28 @@ def notebook_digest_multi(
 
                 # ── Parse YAML frontmatter from source ──
                 frontmatter = {}
-                if text.startswith("---"):
-                    parts = text.split("---", 2)
-                    if len(parts) >= 3:
-                        fm_text = parts[1].strip()
-                        for line in fm_text.split("\n"):
-                            line = line.strip()
-                            if ":" in line:
-                                key, _, val = line.partition(":")
-                                key = key.strip()
-                                val = val.strip().strip('"').strip("'")
+                fm_match = _re.match(
+                    r'^---\s*\r?\n(.*?)\r?\n---\s*\r?\n',
+                    text, _re.DOTALL,
+                )
+                if fm_match:
+                    fm_text = fm_match.group(1)
+                    for line in fm_text.split("\n"):
+                        line = line.strip()
+                        if ":" in line:
+                            key, _, val = line.partition(":")
+                            key = key.strip()
+                            val = val.strip().strip('"').strip("'")
+                            if key:  # skip empty keys
                                 frontmatter[key] = val
 
                 # ── Add source ──
                 add_result = client.add_text_source(nb_id, text=text, title=item["title"])
                 if not add_result:
+                    with _progress_lock:
+                        _progress["done"] += 1
+                        _progress["failed"] += 1
+                    _log_progress(f"NB{nb_idx}: ❌ {_progress['done']}/{n_files} {item['title'][:40]} — add source failed")
                     chunk_results.append({
                         **item, "status": "failed", "error": "Failed to add source",
                     })
@@ -2707,6 +2733,9 @@ def notebook_digest_multi(
                             nb_id, query_text=query_template,
                             source_ids=[source_id],
                         )
+                        nb_queries += 1
+                        with _progress_lock:
+                            _total_queries["count"] += 1
                         if result and result.get("answer"):
                             answer = result["answer"]
                             break
@@ -2719,6 +2748,10 @@ def notebook_digest_multi(
                             time.sleep(2)
 
                 if not answer:
+                    with _progress_lock:
+                        _progress["done"] += 1
+                        _progress["failed"] += 1
+                    _log_progress(f"NB{nb_idx}: ❌ {_progress['done']}/{n_files} {item['title'][:40]} — query failed")
                     chunk_results.append({
                         **item, "status": "failed",
                         "error": f"Query failed after {max_retries} attempts: {last_error}",
@@ -2731,6 +2764,10 @@ def notebook_digest_multi(
                     if m in answer.upper()
                 )
                 if markers_found < 2 or len(answer) < 300:
+                    with _progress_lock:
+                        _progress["done"] += 1
+                        _progress["failed"] += 1
+                    _log_progress(f"NB{nb_idx}: ❌ {_progress['done']}/{n_files} {item['title'][:40]} — validation failed ({markers_found}/4 markers)")
                     chunk_results.append({
                         **item, "status": "failed",
                         "error": f"Response failed validation ({markers_found}/4 markers, {len(answer)} chars)",
@@ -2738,7 +2775,6 @@ def notebook_digest_multi(
                     continue
 
                 # ── Extract SHORT_TITLE from response ──
-                import re as _re
                 digest_body = answer
                 short_title = ""
                 st_match = _re.match(
@@ -2767,8 +2803,17 @@ def notebook_digest_multi(
                     output_content = "\n".join(fm_lines) + "\n\n" + digest_body
 
                 # ── Save digest ──
+                os.makedirs(os.path.dirname(item["output_path"]), exist_ok=True)
                 with open(item["output_path"], "w", encoding="utf-8") as f:
                     f.write(output_content)
+                with _progress_lock:
+                    _progress["done"] += 1
+                    _progress["success"] += 1
+                st_display = short_title or frontmatter.get("abridged_title", item["title"][:30])
+                _log_progress(
+                    f"NB{nb_idx}: ✅ {_progress['done']}/{n_files} "
+                    f"{st_display}"
+                )
                 chunk_results.append({
                     **item, "status": "success",
                     "output_size": len(output_content.encode("utf-8")),
@@ -2776,6 +2821,13 @@ def notebook_digest_multi(
                 })
 
             except Exception as e:
+                with _progress_lock:
+                    _progress["done"] += 1
+                    _progress["failed"] += 1
+                _log_progress(
+                    f"NB{nb_idx}: ❌ {_progress['done']}/{n_files} "
+                    f"{item['title'][:40]} — {str(e)[:60]}"
+                )
                 chunk_results.append({
                     **item, "status": "failed", "error": str(e),
                 })
@@ -2788,6 +2840,7 @@ def notebook_digest_multi(
                     except Exception:
                         pass  # Best-effort cleanup
 
+        _log_progress(f"NB{nb_idx}: finished — {len(chunk_results)} processed, {sources_deleted} sources cleaned")
         return chunk_results
 
     # Execute all notebook chunks in parallel
@@ -2805,6 +2858,15 @@ def notebook_digest_multi(
 
     success = sum(1 for r in all_results if r.get("status") == "success")
     skipped = sum(1 for r in all_results if r.get("status") == "skipped")
+    failed = n_files - success - skipped
+    elapsed = time.time() - _start_time
+    total_q = _total_queries["count"]
+    qpm = (total_q / elapsed * 60) if elapsed > 0 else 0
+
+    _log_progress(
+        f"DONE — {success} saved, {skipped} skipped, {failed} failed "
+        f"in {elapsed:.1f}s ({total_q} queries, {qpm:.1f} q/min)"
+    )
 
     return {
         "status": "success" if (success + skipped) == n_files else "partial",
@@ -2813,9 +2875,13 @@ def notebook_digest_multi(
             "notebooks_used": len(notebook_chunks),
             "digests_saved": success + skipped,
             "skipped": skipped,
-            "failed": n_files - success - skipped,
+            "failed": failed,
+            "elapsed_seconds": round(elapsed, 1),
+            "total_queries": total_q,
+            "queries_per_minute": round(qpm, 1),
         },
         "results": all_results,
+        "progress_log": _progress_log,
     }
 
 def main():
