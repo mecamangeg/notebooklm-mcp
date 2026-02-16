@@ -11,13 +11,15 @@
 ### Existing Worker Notebooks (REUSE THESE)
 These 3 notebooks were created and tested. They use LIFO source management — sources are auto-deleted after each batch, so they **never fill up**.
 
-| Notebook | ID | Status |
-|----------|-----|--------|
-| Worker 1 | `9daa06dc-b783-455a-b525-3c9cd3c36b9e` | ✅ Tested, clean |
-| Worker 2 | `d30bc801-da43-4e32-b044-bb1c0b6a20b4` | ✅ Tested, clean |
-| Worker 3 | `942b25a4-8528-4d50-bbf9-3915af267402` | ✅ Tested, clean |
-| Worker 4 | `42b27b34-ea16-4612-870b-84f9e40e296a` | ✅ User-provided |
-| Worker 5 | `599684ce-78f3-4bd2-a8c9-45c294160dfe` | ✅ User-provided |
+| Notebook | Name | ID | Sources | Status |
+|----------|------|-----|---------|--------|
+| Worker 1 | Notebook1 | `9daa06dc-b783-455a-b525-3c9cd3c36b9e` | 14 (legacy) | ✅ Ready |
+| Worker 2 | Notebook2 | `d30bc801-da43-4e32-b044-bb1c0b6a20b4` | 3 (legacy) | ✅ Ready |
+| Worker 3 | Notebook3 | `942b25a4-8528-4d50-bbf9-3915af267402` | 3 (legacy) | ✅ Ready |
+| Worker 4 | Notebook4 | `42b27b34-ea16-4612-870b-84f9e40e296a` | 0 | ✅ Clean |
+| Worker 5 | Notebook5 | `599684ce-78f3-4bd2-a8c9-45c294160dfe` | 0 | ✅ Clean |
+
+> **Note**: Workers 1-3 have leftover sources from pre-LIFO test runs. These don't affect the pipeline — LIFO adds/deletes sources per batch, so existing sources are harmless. They can be manually cleaned via `notebooklm.source_delete` if desired.
 
 ### Production Progress
 **Nothing has been processed yet.** All previous runs were tests saved in `C:\PROJECTS\notebooklm-mcp\2013\` (v2-test, v3-test, multi-notebook-test, lifo-test). Production output goes to `C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\`.
