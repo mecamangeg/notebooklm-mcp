@@ -2096,6 +2096,202 @@ def notebook_query_batch(
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+DEFAULT_DIGEST_QUERY = (
+    "Provide a comprehensive case digest for this document. Include: "
+    "(1) Case Title and Citation, (2) Facts, (3) Issues, "
+    "(4) Ruling/Held, (5) Ratio Decidendi/Reasoning, and (6) Disposition. "
+    "Be thorough and precise."
+)
+
+
+@mcp.tool()
+def notebook_query_save(
+    notebook_id: str,
+    query: str,
+    output_path: str,
+    source_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Query notebook and save the answer directly to a .md file on disk.
+
+    The answer text NEVER transits through the agent context — only metadata is returned.
+    Use this instead of notebook_query when you want to save the result to a file.
+
+    Args:
+        notebook_id: Notebook UUID
+        query: Question to ask
+        output_path: Absolute path to save the .md file
+        source_ids: Source IDs to query (default: all)
+    """
+    import os
+
+    try:
+        client = get_client()
+        result = client.query(
+            notebook_id,
+            query_text=query,
+            source_ids=source_ids,
+        )
+
+        if not result or not result.get("answer"):
+            return {"status": "error", "error": "Query returned no answer"}
+
+        answer = result["answer"]
+
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(answer)
+
+        return {
+            "status": "success",
+            "output_path": output_path,
+            "size_bytes": len(answer.encode("utf-8")),
+            "conversation_id": result.get("conversation_id"),
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def notebook_digest_pipeline(
+    notebook_id: str,
+    file_paths: list[str],
+    output_dir: str,
+    query_template: str = DEFAULT_DIGEST_QUERY,
+    titles: list[str] | None = None,
+) -> dict[str, Any]:
+    """Full pipeline: reads files from disk → adds as sources → queries each → saves digests.
+
+    This is the OPTIMAL tool for batch case digest generation. The agent only sees
+    metadata — no document text or digest content passes through the context window.
+
+    Processes files sequentially and saves results incrementally, so partial results
+    are preserved even if the pipeline times out.
+
+    Args:
+        notebook_id: Notebook UUID
+        file_paths: List of absolute file paths to process
+        output_dir: Directory to save digest .md files
+        query_template: Query to use for each source (default: case digest prompt)
+        titles: Optional list of titles (one per file). Defaults to filename.
+    """
+    import os
+
+    if not file_paths:
+        return {"status": "error", "error": "No file paths provided"}
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    try:
+        client = get_client()
+    except Exception as e:
+        return {"status": "error", "error": f"Auth failed: {e}"}
+
+    results = []
+    add_success = 0
+    query_success = 0
+    total = len(file_paths)
+
+    for i, path in enumerate(file_paths):
+        # Determine title
+        if titles and i < len(titles):
+            title = titles[i]
+        else:
+            title = os.path.splitext(os.path.basename(path))[0]
+
+        entry = {"index": i, "title": title, "path": path}
+
+        # Step 1: Read and add the file
+        if not os.path.exists(path):
+            entry["status"] = "failed"
+            entry["error"] = f"File not found: {path}"
+            results.append(entry)
+            continue
+
+        try:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    text = f.read()
+            except UnicodeDecodeError:
+                with open(path, "r", encoding="latin-1") as f:
+                    text = f.read()
+
+            if not text.strip():
+                entry["status"] = "skipped"
+                entry["error"] = "File is empty"
+                results.append(entry)
+                continue
+
+            add_result = client.add_text_source(notebook_id, text=text, title=title)
+            if not add_result:
+                entry["status"] = "failed"
+                entry["error"] = "Failed to add source"
+                results.append(entry)
+                continue
+
+            source_id = add_result.get("id")
+            entry["source_id"] = source_id
+            entry["input_size"] = len(text.encode("utf-8"))
+            add_success += 1
+
+        except Exception as e:
+            entry["status"] = "failed"
+            entry["error"] = f"Add source failed: {e}"
+            results.append(entry)
+            continue
+
+        # Step 2: Query for digest
+        try:
+            query_result = client.query(
+                notebook_id,
+                query_text=query_template,
+                source_ids=[source_id],
+            )
+
+            if not query_result or not query_result.get("answer"):
+                entry["status"] = "partial"
+                entry["error"] = "Source added but query returned no answer"
+                results.append(entry)
+                continue
+
+            answer = query_result["answer"]
+
+            # Step 3: Save to disk
+            # Use a sanitized filename
+            safe_title = "".join(
+                c if c.isalnum() or c in " .-_()," else "_"
+                for c in title
+            ).strip()
+            if not safe_title:
+                safe_title = f"digest_{i}"
+            output_path = os.path.join(output_dir, f"{safe_title}-case-digest.md")
+
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(answer)
+
+            entry["status"] = "success"
+            entry["output_path"] = output_path
+            entry["output_size"] = len(answer.encode("utf-8"))
+            query_success += 1
+
+        except Exception as e:
+            entry["status"] = "partial"
+            entry["error"] = f"Source added but query failed: {e}"
+
+        results.append(entry)
+
+    return {
+        "status": "success" if query_success == total else "partial",
+        "summary": {
+            "total": total,
+            "sources_added": add_success,
+            "digests_saved": query_success,
+            "failed": total - query_success,
+        },
+        "results": results,
+    }
+
 
 def main():
     """Run the MCP server."""
