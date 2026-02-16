@@ -2099,6 +2099,11 @@ def notebook_query_batch(
 DEFAULT_DIGEST_QUERY = (
     "Write a case digest for this Philippine Supreme Court decision following "
     "this exact format:\n\n"
+    "SHORT_TITLE: [Provide a corrected short case title using 'v.' format, "
+    "e.g. 'Agoy v. NLRC' or 'Heirs of Buensuceso v. Perez'. Use the primary "
+    "petitioner surname and primary respondent surname/agency only. Remove "
+    "first names, 'et al.', 'Inc.', and other unnecessary words. Keep it "
+    "under 40 characters.]\n\n"
     "I. CAPTION\n"
     "Provide: Full case title (Petitioner v. Respondent), G.R. Number, "
     "date decided, Phil. Reports citation if available, and the ponente "
@@ -2132,7 +2137,8 @@ DEFAULT_DIGEST_QUERY = (
     "- Use 'W/N' abbreviation for 'Whether or not' in issues.\n"
     "- Be precise with dates, amounts, and legal citations.\n"
     "- Keep the digest concise — a law student should be able to review "
-    "it quickly before class."
+    "it quickly before class.\n"
+    "- The SHORT_TITLE line MUST be the very first line of your response."
 )
 
 
@@ -2519,7 +2525,7 @@ def notebook_digest_multi(
     output_dir: str,
     query_template: str = DEFAULT_DIGEST_QUERY,
     batch_size: int = 1,
-    max_retries: int = 2,
+    max_retries: int = 3,
     delay: float = 1.0,
 ) -> dict[str, Any]:
     """Distribute files across MULTIPLE notebooks for maximum parallel throughput.
@@ -2666,6 +2672,20 @@ def notebook_digest_multi(
                     })
                     continue
 
+                # ── Parse YAML frontmatter from source ──
+                frontmatter = {}
+                if text.startswith("---"):
+                    parts = text.split("---", 2)
+                    if len(parts) >= 3:
+                        fm_text = parts[1].strip()
+                        for line in fm_text.split("\n"):
+                            line = line.strip()
+                            if ":" in line:
+                                key, _, val = line.partition(":")
+                                key = key.strip()
+                                val = val.strip().strip('"').strip("'")
+                                frontmatter[key] = val
+
                 # ── Add source ──
                 add_result = client.add_text_source(nb_id, text=text, title=item["title"])
                 if not add_result:
@@ -2717,12 +2737,42 @@ def notebook_digest_multi(
                     })
                     continue
 
+                # ── Extract SHORT_TITLE from response ──
+                import re as _re
+                digest_body = answer
+                short_title = ""
+                st_match = _re.match(
+                    r'^\s*(?:\*{0,2})SHORT[_\s]?TITLE(?:\*{0,2})\s*[:：]\s*(.+)',
+                    answer, _re.IGNORECASE,
+                )
+                if st_match:
+                    short_title = st_match.group(1).strip().strip('*').strip()
+                    # Remove the SHORT_TITLE line from the digest body
+                    digest_body = answer[st_match.end():].lstrip("\n\r")
+
+                # ── Build output with preserved frontmatter ──
+                output_content = digest_body
+                if frontmatter:
+                    # Update abridged_title with corrected short title
+                    if short_title:
+                        frontmatter["abridged_title"] = short_title
+                    fm_lines = ["---"]
+                    for key, val in frontmatter.items():
+                        # Quote string values
+                        if isinstance(val, str) and not val.isdigit():
+                            fm_lines.append(f'{key}: "{val}"')
+                        else:
+                            fm_lines.append(f"{key}: {val}")
+                    fm_lines.append("---")
+                    output_content = "\n".join(fm_lines) + "\n\n" + digest_body
+
                 # ── Save digest ──
                 with open(item["output_path"], "w", encoding="utf-8") as f:
-                    f.write(answer)
+                    f.write(output_content)
                 chunk_results.append({
                     **item, "status": "success",
-                    "output_size": len(answer.encode("utf-8")),
+                    "output_size": len(output_content.encode("utf-8")),
+                    "short_title": short_title or frontmatter.get("abridged_title", ""),
                 })
 
             except Exception as e:
