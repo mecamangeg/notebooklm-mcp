@@ -56,7 +56,7 @@ notebooklm-mcp-auth
 Log in to Google in the Chrome window that opens. Wait for "SUCCESS" message.
 
 ### 2. Create 3 Worker Notebooks
-Create 3 dedicated notebooks for the pipeline. These are reusable — they accumulate sources but that doesn't affect performance.
+Create 3 dedicated notebooks for the pipeline. These are **permanently reusable** — the pipeline uses LIFO source management (add → query → delete) so notebooks never accumulate sources.
 
 ```
 notebooklm.notebook_create  →  title: "Digest Worker 1"
@@ -64,9 +64,9 @@ notebooklm.notebook_create  →  title: "Digest Worker 2"
 notebooklm.notebook_create  →  title: "Digest Worker 3"
 ```
 
-Save the 3 notebook IDs. You will reuse them across all batches.
+Save the 3 notebook IDs. You will reuse them **for the entire 31,832-file run**.
 
-> **⚠️ NotebookLM Source Limit**: Each notebook has a maximum of **50 sources**. After ~50 files, create fresh notebooks. The pipeline handles this gracefully — just provide new notebook IDs.
+> **Source Lifecycle (LIFO)**: Each batch cycle adds `batch_size` sources, queries them, saves digests, then **immediately deletes** those sources. The notebook never exceeds `batch_size` sources at any time, well under the 50-source limit.
 
 ### 3. Verify Output Directory Exists
 ```powershell
@@ -132,6 +132,8 @@ Distributes files across multiple notebooks. Each notebook processes its share c
 **Performance**: ~6s per doc with 3 notebooks.
 
 **Key features**:
+- **LIFO source management**: Add → query → save → delete per batch. Notebooks never accumulate sources.
+- **No source limit**: Same 3 notebooks can process unlimited files (never exceeds `batch_size` sources).
 - **Resume on re-run**: Skips files whose digest already exists (>100 bytes). Safe to re-run after timeout.
 - **Per-batch retry**: Failed queries retry up to `max_retries` times.
 - **Incremental saves**: Each digest is saved immediately — partial results survive timeouts.
@@ -154,20 +156,18 @@ Same as above but uses only 1 notebook. Use if multi-notebook is unavailable.
 
 ## Handling Large Months (50+ files)
 
-NotebookLM notebooks have a source limit (~50). For months with >50 files:
+**No special handling needed.** The pipeline uses LIFO source management — sources are deleted after each batch query. The same 3 notebooks can process any number of files without hitting the 50-source limit.
 
-### Option A: Fresh Notebooks per Batch (RECOMMENDED)
-1. Create 3 fresh notebooks before each large batch
-2. Process first 45 files (15 per notebook)
-3. Create 3 more fresh notebooks
-4. Process next 45 files
-5. Repeat until done
+Just pass all files in a single call:
+```
+notebooklm.notebook_digest_multi
+  notebook_ids: ["{ID1}", "{ID2}", "{ID3}"]   ← same 3 notebooks always
+  file_paths: [... all 130 files ...]
+  output_dir: "..."
+  batch_size: 3
+```
 
-### Option B: Delete Sources Between Batches
-```
-notebooklm.notebook_source_delete_all  →  notebook_id: "{ID}"
-```
-Clear sources from each notebook before the next batch.
+The pipeline internally cycles: add 3 → query → save → delete 3 → add next 3 → ...
 
 ---
 
@@ -218,31 +218,21 @@ $src = "C:\PROJECTS\supreme-court-scraper\MARKDOWN\markdown\2013\01_Jan"
 $files = (Get-ChildItem $src -File -Filter "*.md").FullName
 # Result: 87 files
 
-# Step 2: Create 3 worker notebooks (or reuse existing)
-notebooklm.notebook_create → "Worker Jan-A"  → ID: aaa...
-notebooklm.notebook_create → "Worker Jan-B"  → ID: bbb...
-notebooklm.notebook_create → "Worker Jan-C"  → ID: ccc...
+# Step 2: Use the same 3 worker notebooks (created once, reused forever)
+# Worker 1: aaa..., Worker 2: bbb..., Worker 3: ccc...
 
-# Step 3: Process first 45 files (15 per notebook × 3)
+# Step 3: Process ALL 87 files in one call (LIFO handles source cleanup)
 notebooklm.notebook_digest_multi
   notebook_ids: ["aaa...", "bbb...", "ccc..."]
-  file_paths: [first 45 file paths]
+  file_paths: [all 87 file paths]
   output_dir: "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\2013\01_Jan"
   batch_size: 3
 
-# Step 4: Create 3 fresh notebooks for remaining 42 files
-notebooklm.notebook_create → "Worker Jan-D"  → ID: ddd...
-notebooklm.notebook_create → "Worker Jan-E"  → ID: eee...
-notebooklm.notebook_create → "Worker Jan-F"  → ID: fff...
+# Internally: each notebook processes ~29 files
+#   add 3 → query → save 3 → delete 3 → add next 3 → ... (10 cycles each)
+#   Total: ~10 batch queries × 20s / 3 notebooks = ~70s
 
-# Step 5: Process remaining 42 files
-notebooklm.notebook_digest_multi
-  notebook_ids: ["ddd...", "eee...", "fff..."]
-  file_paths: [remaining 42 file paths]
-  output_dir: "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\2013\01_Jan"
-  batch_size: 3
-
-# Step 6: Verify
+# Step 4: Verify
 $done = (Get-ChildItem "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\2013\01_Jan" -File).Count
 # Expected: 87
 ```
@@ -255,7 +245,7 @@ $done = (Get-ChildItem "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\2013\01_Jan" -Fi
 |----------|-------------|--------|
 | **Timeout** | Pipeline saves partial results | Re-run same command — resume skips completed files |
 | **Auth expired** | Returns "Cookies have expired" | Run `notebooklm-mcp-auth`, log in, retry |
-| **Notebook source limit** | Add source fails | Create fresh notebooks, re-run — resume skips completed |
+| **Notebook source limit** | N/A — LIFO auto-cleanup keeps notebooks under limit | Same 3 notebooks work indefinitely |
 | **Split mismatch** | Batch response can't be split | Entry marked `partial` — re-run with `batch_size: 1` for those files |
 | **Network error** | Per-batch retry kicks in | Automatic — up to `max_retries` attempts |
 
