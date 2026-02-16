@@ -3,6 +3,7 @@
 Usage: 
   python notebooklm-mcp-runner.py --volume Volume_001
   python notebooklm-mcp-runner.py --all  (Iterates through all Volumes numerically)
+  python notebooklm-mcp-runner.py --all --start-at Volume_050  (Skip volumes before 050)
 
 Auto-refresh: Cookies are silently re-extracted from Chrome every
 REFRESH_INTERVAL_VOLUMES volumes (default: 5) to prevent auth expiration
@@ -14,6 +15,7 @@ import sys
 import time
 import argparse
 import re
+import traceback
 
 # Add source to path so we can import directly
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
@@ -49,7 +51,7 @@ REFRESH_INTERVAL_SECONDS = 600 # Or every 10 minutes, whichever comes first
 
 # ── Cookie Auto-Refresh via Chrome DevTools Protocol ──────────────
 
-_last_refresh_time = 0
+_last_refresh_time = None  # None until first refresh/timer start
 
 
 def silent_refresh_cookies():
@@ -145,17 +147,66 @@ def should_refresh(volumes_since_refresh):
     """Check if it's time for a proactive cookie refresh."""
     if volumes_since_refresh >= REFRESH_INTERVAL_VOLUMES:
         return True
-    if _last_refresh_time and (time.time() - _last_refresh_time) > REFRESH_INTERVAL_SECONDS:
+    if _last_refresh_time is not None and (time.time() - _last_refresh_time) > REFRESH_INTERVAL_SECONDS:
         return True
     return False
+
+
+# ── Digest Validation (mirrors server's _is_digest_valid) ─────────
+
+def _is_digest_valid(filepath):
+    """Check if a digest file is complete and well-formed.
+
+    Mirrors the validation logic in notebook_digest_multi so that the
+    runner's skip logic matches what the server would do internally.
+    """
+    try:
+        if not os.path.exists(filepath):
+            return False
+        size = os.path.getsize(filepath)
+        if size < 500:  # Minimum viable digest is ~500 bytes
+            return False
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+        # Must contain at least 2 of these structural markers
+        markers = 0
+        for marker in ["CAPTION", "FACTS", "ISSUE", "RULING"]:
+            if marker in content.upper():
+                markers += 1
+        return markers >= 2
+    except Exception:
+        return False
+
+
+def _count_valid_digests(out_dir, files):
+    """Count how many source files already have valid digests in out_dir.
+
+    Returns (valid_count, total_checked) so we can report accurate progress.
+    """
+    if not os.path.isdir(out_dir):
+        return 0, len(files)
+
+    valid = 0
+    for f in files:
+        title = os.path.splitext(os.path.basename(f))[0]
+        safe_title = "".join(
+            c if c.isalnum() or c in " .-_()," else "_"
+            for c in title
+        ).strip()
+        digest_path = os.path.join(out_dir, f"{safe_title}-case-digest.md")
+        if _is_digest_valid(digest_path):
+            valid += 1
+
+    return valid, len(files)
 
 
 # ── Processing Logic ──────────────────────────────────────────────
 
 def process_directory(src_dir, out_dir, label):
+    """Process a single volume directory. Returns the result dict or None."""
     if not os.path.isdir(src_dir):
         print(f"ERROR: {src_dir} not found")
-        return
+        return None
 
     files = sorted([
         os.path.join(src_dir, f)
@@ -165,23 +216,21 @@ def process_directory(src_dir, out_dir, label):
 
     if not files:
         print(f"  {label}: no .md files found")
-        return
+        return None
 
-    # Check existing digests
-    existing = 0
-    if os.path.isdir(out_dir):
-        existing = len([f for f in os.listdir(out_dir) if f.endswith("-case-digest.md")])
+    # Content-validated skip check (matches server's _is_digest_valid)
+    valid_existing, total = _count_valid_digests(out_dir, files)
 
     print(f"\n{'='*60}")
     print(f"  Processing {label}")
-    print(f"  {len(files)} files found, {existing} already completed")
+    print(f"  {total} files found, {valid_existing} valid digests already exist")
     print(f"  Source: {src_dir}")
     print(f"  Output: {out_dir}")
     print(f"{'='*60}")
 
-    if existing >= len(files):
-        print(f"  SKIP — all {len(files)} already complete")
-        return
+    if valid_existing >= total:
+        print(f"  SKIP — all {total} already complete (content-validated)")
+        return {"status": "skipped", "summary": {"total": total, "skipped": total, "failed": 0}}
 
     # Import here to avoid loading everything at startup
     from notebooklm_mcp.server import notebook_digest_multi
@@ -213,12 +262,13 @@ def process_directory(src_dir, out_dir, label):
         for line in logs:
             print(f"    {line}")
 
-    # If the whole volume failed, it's likely auth expiration.
-    # Attempt auto-refresh and retry once.
-    if failed > 0 and summary.get("digests_saved", 0) == summary.get("skipped", 0):
-        print(f"\n  ⚠️ Entire volume failed — likely auth expiration. Attempting auto-refresh...")
+    # If ANY files failed, attempt auto-refresh and retry once.
+    # (Previously only triggered on total volume failure — now catches partial failures too)
+    if failed > 0:
+        new_successes = summary.get("digests_saved", 0) - summary.get("skipped", 0)
+        print(f"\n  ⚠️ {failed} file(s) failed (new successes: {new_successes}). Attempting auto-refresh + retry...")
         if silent_refresh_cookies():
-            print(f"  🔄 Retrying {label}...")
+            print(f"  🔄 Retrying {label} (only unfinished files will be re-attempted)...")
             start2 = time.time()
             result = notebook_digest_multi.fn(
                 notebook_ids=NOTEBOOK_IDS,
@@ -231,6 +281,8 @@ def process_directory(src_dir, out_dir, label):
             print(f"  Saved: {summary2.get('digests_saved', '?')}/{summary2.get('total', '?')}")
             print(f"  Failed: {summary2.get('failed', '?')}")
             print(f"  Elapsed: {elapsed2:.1f}s")
+        else:
+            print(f"  Could not refresh cookies — retry skipped. Failures will persist.")
 
     return result
 
@@ -241,12 +293,27 @@ def get_volume_number(name):
     return int(match.group(1)) if match else 0
 
 
+def _format_eta(seconds):
+    """Format seconds into a human-readable duration string."""
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    elif seconds < 3600:
+        m, s = divmod(seconds, 60)
+        return f"{int(m)}m {int(s)}s"
+    else:
+        h, remainder = divmod(seconds, 3600)
+        m, s = divmod(remainder, 60)
+        return f"{int(h)}h {int(m)}m"
+
+
 def main():
     global _last_refresh_time
 
     parser = argparse.ArgumentParser(description="Process e-SCRA cases via NotebookLM multi-pipeline.")
     parser.add_argument("--volume", help="Specific volume (e.g., Volume_001)")
     parser.add_argument("--all", action="store_true", help="Process all volumes in C:\\PROJECTS\\e-scra\\MARKDOWN")
+    parser.add_argument("--start-at", metavar="VOLUME",
+                        help="Skip volumes before this one (e.g., --start-at Volume_050)")
     parser.add_argument("--refresh-every", type=int, default=REFRESH_INTERVAL_VOLUMES,
                         help=f"Auto-refresh cookies every N volumes (default: {REFRESH_INTERVAL_VOLUMES})")
     
@@ -260,7 +327,7 @@ def main():
     else:
         print("Could not refresh from Chrome — using cached cookies.\n")
 
-    _last_refresh_time = time.time()  # Reset timer regardless
+    _last_refresh_time = time.time()  # Start the timer
 
     if args.all:
         # Get all folders named Volume_NNN
@@ -268,12 +335,31 @@ def main():
         
         # Sort numerically instead of lexicographically
         volumes.sort(key=get_volume_number)
-        
-        print(f"Found {len(volumes)} volumes. Starting recursive processing...")
+
+        # --start-at: skip volumes before the specified one
+        if args.start_at:
+            start_num = get_volume_number(args.start_at)
+            original_count = len(volumes)
+            volumes = [v for v in volumes if get_volume_number(v) >= start_num]
+            skipped_count = original_count - len(volumes)
+            if skipped_count > 0:
+                print(f"⏩ --start-at {args.start_at}: skipping {skipped_count} volumes (jumping to {volumes[0] if volumes else 'none'})")
+
+        total_volumes = len(volumes)
+        print(f"Found {total_volumes} volumes to process.")
         print(f"Auto-refresh: every {refresh_interval} volumes or {REFRESH_INTERVAL_SECONDS}s\n")
 
+        # ── Cross-volume progress tracking ──
         volumes_since_refresh = 0
-        for vol in volumes:
+        batch_start_time = time.time()
+        vol_times = []  # Track time per volume for ETA calculation
+        total_files_processed = 0
+        total_files_failed = 0
+        total_files_skipped = 0
+
+        for vol_idx, vol in enumerate(volumes):
+            vol_start = time.time()
+
             # Proactive refresh check
             if should_refresh(volumes_since_refresh):
                 print(f"\n  ⏰ Proactive cookie refresh (after {volumes_since_refresh} volumes)...")
@@ -282,9 +368,44 @@ def main():
 
             src = os.path.join(ESCRA_ROOT, vol)
             dst = os.path.join(OUTPUT_ROOT, vol)
-            process_directory(src, dst, vol)
+            result = process_directory(src, dst, vol)
             volumes_since_refresh += 1
-            
+
+            # Accumulate stats
+            vol_elapsed = time.time() - vol_start
+            vol_times.append(vol_elapsed)
+
+            if result and "summary" in result:
+                s = result["summary"]
+                total_files_processed += s.get("digests_saved", 0) - s.get("skipped", 0)
+                total_files_failed += s.get("failed", 0)
+                total_files_skipped += s.get("skipped", 0)
+
+            # ── Cross-volume progress report with ETA ──
+            completed = vol_idx + 1
+            remaining = total_volumes - completed
+            overall_elapsed = time.time() - batch_start_time
+            avg_time = sum(vol_times) / len(vol_times)
+            eta_seconds = avg_time * remaining
+            eta_str = _format_eta(eta_seconds) if remaining > 0 else "done"
+
+            print(f"\n  📊 Overall: {completed}/{total_volumes} volumes "
+                  f"({total_files_processed} saved, {total_files_skipped} skipped, {total_files_failed} failed) "
+                  f"| Elapsed: {_format_eta(overall_elapsed)} | ETA: {eta_str}")
+
+        # Final summary
+        total_elapsed = time.time() - batch_start_time
+        print(f"\n{'='*60}")
+        print(f"  🏁 BATCH COMPLETE")
+        print(f"  Volumes processed: {total_volumes}")
+        print(f"  New digests saved: {total_files_processed}")
+        print(f"  Skipped (already done): {total_files_skipped}")
+        print(f"  Failed: {total_files_failed}")
+        print(f"  Total time: {_format_eta(total_elapsed)}")
+        if vol_times:
+            print(f"  Avg time/volume: {_format_eta(sum(vol_times)/len(vol_times))}")
+        print(f"{'='*60}")
+
     elif args.volume:
         src = os.path.join(ESCRA_ROOT, args.volume)
         dst = os.path.join(OUTPUT_ROOT, args.volume)
@@ -301,6 +422,5 @@ if __name__ == "__main__":
         sys.exit(1)
     except Exception as e:
         print(f"\nFATAL ERROR: {e}")
-        import traceback
         traceback.print_exc()
         sys.exit(1)
