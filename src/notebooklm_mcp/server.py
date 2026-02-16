@@ -2518,38 +2518,39 @@ def notebook_digest_multi(
     file_paths: list[str],
     output_dir: str,
     query_template: str = DEFAULT_DIGEST_QUERY,
-    batch_size: int = 3,
+    batch_size: int = 1,
     max_retries: int = 2,
     delay: float = 1.0,
 ) -> dict[str, Any]:
     """Distribute files across MULTIPLE notebooks for maximum parallel throughput.
 
-    Each notebook processes its share of files concurrently — true parallelism
-    with zero contention since each thread targets a different notebook.
+    Architecture: 1 case → 1 notebook → 1 query → 1 digest (no batching/splitting).
+    Each notebook processes its share of files sequentially with LIFO cleanup.
+    All notebooks run concurrently — true parallelism with zero contention.
 
     For N notebooks and F files:
       - Each notebook gets ceil(F/N) files
-      - All notebooks process their batch simultaneously
-      - Speedup: ~Nx compared to single notebook
+      - All notebooks process simultaneously
+      - Per case: add source → query → validate → save → delete source
 
-    Example: 9 files across 3 notebooks
-      Notebook-1: add 3 files → batch query → save 3 digests  ─┐
-      Notebook-2: add 3 files → batch query → save 3 digests  ─┤ all concurrent
-      Notebook-3: add 3 files → batch query → save 3 digests  ─┘
-      Total: ~25s instead of ~90s (3.6x speedup)
+    Example: 10 files across 10 notebooks
+      Notebook-1: add 1 → query → save → delete  ─┐
+      Notebook-2: add 1 → query → save → delete  ─┤ all concurrent
+      ...                                          ─┤
+      Notebook-10: add 1 → query → save → delete ─┘
+      Total: ~17s instead of ~170s (10x speedup)
 
     Args:
-        notebook_ids: List of notebook UUIDs to distribute work across
+        notebook_ids: List of notebook UUIDs to distribute work across (use 10)
         file_paths: List of absolute file paths to process
         output_dir: Directory to save digest .md files
         query_template: Query template (default: Madera case digest)
-        batch_size: Cases per query within each notebook (default: 3)
-        max_retries: Retry attempts per batch (default: 2)
+        batch_size: Not used (kept for API compat, always processes 1 at a time)
+        max_retries: Retry attempts per query (default: 2)
         delay: Seconds between staggered starts (default: 1.0)
     """
     import math
     import os
-    import re
     import time
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -2581,11 +2582,30 @@ def notebook_digest_multi(
                 "notebook_index": i,
             })
 
+    def _is_digest_valid(filepath):
+        """Check if a digest file is complete and well-formed."""
+        try:
+            if not os.path.exists(filepath):
+                return False
+            size = os.path.getsize(filepath)
+            if size < 500:  # Minimum viable digest is ~500 bytes
+                return False
+            with open(filepath, "r", encoding="utf-8") as f:
+                content = f.read()
+            # Must contain at least 2 of these structural markers
+            markers = 0
+            for marker in ["CAPTION", "FACTS", "ISSUE", "RULING"]:
+                if marker in content.upper():
+                    markers += 1
+            return markers >= 2
+        except Exception:
+            return False
+
     def _process_notebook_chunk(chunk):
         """Process a chunk of files in a single notebook using LIFO source management.
 
-        For each batch: add sources → query → save digests → DELETE sources.
-        This keeps the notebook under the 50-source cap indefinitely.
+        For each case: add source → query → validate → save → DELETE source.
+        One case at a time (batch_size=1) eliminates all split/regex issues.
         """
         nb_id = chunk["notebook_id"]
         paths = chunk["file_paths"]
@@ -2603,8 +2623,8 @@ def notebook_digest_multi(
             ).strip() or f"digest_{nb_idx}"
             output_path = os.path.join(output_dir, f"{safe_title}-case-digest.md")
 
-            # Resume: skip existing
-            if os.path.exists(output_path) and os.path.getsize(output_path) > 100:
+            # Resume: skip only if digest is VALID (content-checked, not just size)
+            if _is_digest_valid(output_path):
                 chunk_results.append({
                     "title": title, "path": path, "output_path": output_path,
                     "status": "skipped", "output_size": os.path.getsize(output_path),
@@ -2620,132 +2640,100 @@ def notebook_digest_multi(
         if not pending:
             return chunk_results
 
-        # Process in batch cycles: add → query → save → delete
-        for b in range(0, len(pending), batch_size):
-            batch_items = pending[b:b + batch_size]
+        # Process one case at a time: add → query → validate → save → delete
+        for item in pending:
+            path = item["path"]
+            source_id = None
 
-            # ── Step 1: Add sources for this batch ──
-            batch_sources = []
-            for item in batch_items:
-                path = item["path"]
-                if not os.path.exists(path):
+            if not os.path.exists(path):
+                chunk_results.append({
+                    **item, "status": "failed", "error": "File not found",
+                })
+                continue
+
+            try:
+                # ── Read file ──
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        text = f.read()
+                except UnicodeDecodeError:
+                    with open(path, "r", encoding="latin-1") as f:
+                        text = f.read()
+
+                if not text.strip():
                     chunk_results.append({
-                        **item, "status": "failed",
-                        "error": "File not found",
+                        **item, "status": "skipped", "error": "File is empty",
                     })
                     continue
 
-                try:
+                # ── Add source ──
+                add_result = client.add_text_source(nb_id, text=text, title=item["title"])
+                if not add_result:
+                    chunk_results.append({
+                        **item, "status": "failed", "error": "Failed to add source",
+                    })
+                    continue
+
+                source_id = add_result.get("id")
+                item["source_id"] = source_id
+                item["input_size"] = len(text.encode("utf-8"))
+
+                # ── Query with retry ──
+                answer = None
+                last_error = None
+                for attempt in range(1, max_retries + 1):
                     try:
-                        with open(path, "r", encoding="utf-8") as f:
-                            text = f.read()
-                    except UnicodeDecodeError:
-                        with open(path, "r", encoding="latin-1") as f:
-                            text = f.read()
-
-                    if not text.strip():
-                        chunk_results.append({
-                            **item, "status": "skipped", "error": "File is empty",
-                        })
-                        continue
-
-                    add_result = client.add_text_source(nb_id, text=text, title=item["title"])
-                    if not add_result:
-                        chunk_results.append({
-                            **item, "status": "failed", "error": "Failed to add source",
-                        })
-                        continue
-
-                    item["source_id"] = add_result.get("id")
-                    item["input_size"] = len(text.encode("utf-8"))
-                    batch_sources.append(item)
-
-                except Exception as e:
-                    chunk_results.append({
-                        **item, "status": "failed", "error": str(e),
-                    })
-
-            if not batch_sources:
-                continue
-
-            # ── Step 2: Query this batch ──
-            source_ids = [e["source_id"] for e in batch_sources]
-
-            if len(batch_sources) == 1:
-                query_text = query_template
-            else:
-                case_list = "\n".join(f"- {e['title']}" for e in batch_sources)
-                query_text = (
-                    f"Write separate case digests for each of the following cases. "
-                    f"Use a clear separator (a line of dashes: ---) between each digest.\n\n"
-                    f"Cases:\n{case_list}\n\n"
-                    f"For EACH case, follow this format:\n{query_template}"
-                )
-
-            answer = None
-            last_error = None
-            for attempt in range(1, max_retries + 1):
-                try:
-                    result = client.query(nb_id, query_text=query_text, source_ids=source_ids)
-                    if result and result.get("answer"):
-                        answer = result["answer"]
-                        break
-                    last_error = "No answer"
-                    if attempt < max_retries:
-                        time.sleep(2)
-                except Exception as e:
-                    last_error = str(e)
-                    if attempt < max_retries:
-                        time.sleep(2)
-
-            # ── Step 3: Save digests ──
-            if not answer:
-                for entry in batch_sources:
-                    chunk_results.append({
-                        **entry, "status": "partial",
-                        "error": f"Query failed: {last_error}",
-                    })
-            else:
-                # Split and save
-                if len(batch_sources) == 1:
-                    digests = [answer]
-                else:
-                    parts = re.split(r'\n-{3,}\n|\n={3,}\n|\n\*{3,}\n', answer)
-                    parts = [p.strip() for p in parts if p.strip() and len(p.strip()) > 100]
-                    if len(parts) != len(batch_sources):
-                        parts2 = re.split(
-                            r'(?=\*{0,2}I\.\s*CAPTION\*{0,2})', answer, flags=re.IGNORECASE
+                        result = client.query(
+                            nb_id, query_text=query_template,
+                            source_ids=[source_id],
                         )
-                        parts2 = [p.strip() for p in parts2 if p.strip() and len(p.strip()) > 100]
-                        if len(parts2) == len(batch_sources):
-                            parts = parts2
-                    digests = parts if parts else [answer]
+                        if result and result.get("answer"):
+                            answer = result["answer"]
+                            break
+                        last_error = "No answer returned"
+                        if attempt < max_retries:
+                            time.sleep(2)
+                    except Exception as e:
+                        last_error = str(e)
+                        if attempt < max_retries:
+                            time.sleep(2)
 
-                for j, entry in enumerate(batch_sources):
-                    if j < len(digests):
-                        try:
-                            with open(entry["output_path"], "w", encoding="utf-8") as f:
-                                f.write(digests[j])
-                            chunk_results.append({
-                                **entry, "status": "success",
-                                "output_size": len(digests[j].encode("utf-8")),
-                            })
-                        except Exception as e:
-                            chunk_results.append({
-                                **entry, "status": "partial", "error": f"Save failed: {e}",
-                            })
-                    else:
-                        chunk_results.append({
-                            **entry, "status": "partial",
-                            "error": f"Split mismatch ({len(digests)} vs {len(batch_sources)})",
-                        })
+                if not answer:
+                    chunk_results.append({
+                        **item, "status": "failed",
+                        "error": f"Query failed after {max_retries} attempts: {last_error}",
+                    })
+                    continue
 
-            # ── Step 4: Delete sources (LIFO cleanup) ──
-            for entry in batch_sources:
-                sid = entry.get("source_id")
-                if sid:
+                # ── Validate answer before saving ──
+                markers_found = sum(
+                    1 for m in ["CAPTION", "FACTS", "ISSUE", "RULING"]
+                    if m in answer.upper()
+                )
+                if markers_found < 2 or len(answer) < 300:
+                    chunk_results.append({
+                        **item, "status": "failed",
+                        "error": f"Response failed validation ({markers_found}/4 markers, {len(answer)} chars)",
+                    })
+                    continue
+
+                # ── Save digest ──
+                with open(item["output_path"], "w", encoding="utf-8") as f:
+                    f.write(answer)
+                chunk_results.append({
+                    **item, "status": "success",
+                    "output_size": len(answer.encode("utf-8")),
+                })
+
+            except Exception as e:
+                chunk_results.append({
+                    **item, "status": "failed", "error": str(e),
+                })
+            finally:
+                # ── LIFO cleanup: always delete source ──
+                if source_id:
                     try:
-                        client.delete_source(sid)
+                        client.delete_source(source_id)
                         sources_deleted += 1
                     except Exception:
                         pass  # Best-effort cleanup
