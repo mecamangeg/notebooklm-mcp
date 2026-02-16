@@ -1,85 +1,117 @@
 ---
-description: Process court case documents through NotebookLM for digest generation
+description: Generate case digests using NotebookLM MCP (optimized v2 pipeline)
 ---
 
-# NotebookLM Case Digest Pipeline
+# NotebookLM Case Digest Pipeline (v2)
 
-Batch-process court case `.md` files into AI-generated case digests via NotebookLM.
+## Overview
+Generates case digests from court decision files using NotebookLM AI.
+Uses the `notebook_digest_pipeline` tool for zero-context-cost processing.
 
 ## Prerequisites
+- NotebookLM cookies configured (run `check_auth_status` to verify)
+- Case files in markdown/txt format on disk
+- Fresh MCP proxy with `toolTimeout: 300` for notebooklm server
 
-- NotebookLM authentication cookies must be valid
-- Target notebook must exist (or will be created)
-- Source `.md` files must be accessible on local disk
+---
 
-## Workflow Steps
+## Pipeline (2 turns)
 
-// turbo-all
+### Turn 1: Auth + Create Notebook
+```
+1. Run notebooklm.check_auth_status to verify cookies are valid
+2. Run notebooklm.notebook_create with a descriptive project title
+   (e.g., "Feb 2013 Case Digests")
+3. Note the notebook_id from the response
+```
 
-1. **Validate Authentication**
-   Call `check_auth_status` to validate cookies before starting. If cookies are expired, re-authenticate using `save_auth_tokens` with fresh cookies from Chrome DevTools.
+### Turn 2: Run Full Pipeline
+```
+Run notebooklm.notebook_digest_pipeline with:
+  - notebook_id: <from step 1>
+  - file_paths: list of absolute paths to case .md files
+  - output_dir: directory to save digest files (e.g., "C:\output\2013")
+  - query_template: (optional, defaults to comprehensive case digest prompt)
+  - titles: (optional, defaults to filenames)
+```
 
-   ```
-   execute_tool("notebooklm.check_auth_status", {})
-   ```
+That's it. The pipeline tool handles everything:
+1. Reads each file from disk (no context cost)
+2. Adds as a source to the notebook
+3. Queries NotebookLM for a case digest
+4. Saves the digest to disk as a .md file
+5. Returns only metadata (status, sizes, paths)
 
-2. **Identify Source Files**
-   List the target directory to identify all `.md` files to process. Filter out any existing `-case-digest.md` files.
-
-   ```powershell
-   Get-ChildItem "C:\path\to\cases\*.md" | Where-Object { $_.Name -notlike "*-case-digest*" } | Select-Object FullName, Name
-   ```
-
-3. **Add All Sources via Local File Path (Single Call)**
-   Use `notebook_add_local_files` to add all files in ONE call — no need to read files into context:
-
-   ```
-   execute_tool("notebooklm.notebook_add_local_files", {
-     "notebook_id": "<NOTEBOOK_ID>",
-     "file_paths": ["C:\\path\\to\\case1.md", "C:\\path\\to\\case2.md", ...],
-     "titles": ["Case 1 Title", "Case 2 Title", ...]
-   })
-   ```
-
-   This returns `source_id` for each successfully added file.
-
-4. **Generate All Digests (Single Call)**
-   Use `notebook_query_batch` to query each source for its case digest:
-
-   ```
-   execute_tool("notebooklm.notebook_query_batch", {
-     "notebook_id": "<NOTEBOOK_ID>",
-     "queries": [
-       {
-         "query": "Provide a comprehensive case digest for this document. Include: (1) Case Title and Citation, (2) Facts, (3) Issues, (4) Ruling/Held, (5) Ratio Decidendi/Reasoning, and (6) Disposition. Be thorough and precise.",
-         "source_ids": ["<SOURCE_ID_1>"],
-         "label": "Case 1 Title"
-       },
-       ...
-     ]
-   })
-   ```
-
-5. **Save All Digests**
-   Write each digest to a new `-case-digest.md` file in the same directory as the source:
-
-   ```
-   For each result:
-     write_to_file(
-       TargetFile="<original_path_without_extension>-case-digest.md",
-       CodeContent=result.answer
-     )
-   ```
+---
 
 ## Performance Comparison
 
-| Approach | Agent Turns | Estimated Time |
-|----------|-------------|----------------|
-| **Old (sequential)** | ~20+ turns | ~150s for 10 docs |
-| **New (batch tools)** | 3-4 turns | ~30-45s for 10 docs |
+| Metric | v1 (manual) | v1.5 (batch tools) | v2 (pipeline) |
+|--------|-------------|---------------------|---------------|
+| Agent turns | 20+ | 3-4 | **2** |
+| Tool calls | 15+ | 7-10 | **3** |
+| Context consumed | ~200KB | ~60KB | **~500 bytes** |
+| Time (5 docs) | ~5 min | ~70s | **~90s** |
+| Timeout risk | None | High (30s) | Low (300s) |
+
+---
+
+## Tool Decision Tree
+
+Choose the right tool based on your use case:
+
+```
+Need to process batch of files into digests?
+  └─ YES → notebook_digest_pipeline (1 call, zero context cost)
+
+Need to query and save a single answer?
+  └─ YES → notebook_query_save (saves to disk, zero context cost)
+
+Need to query and see the answer in context?
+  └─ YES → notebook_query (answer returns through context)
+
+Need to add many files without generating digests?
+  └─ YES → notebook_add_local_files (batch add, zero context cost)
+```
+
+---
+
+## Timeout Configuration
+
+The `notebooklm` server has `toolTimeout: 300` (5 minutes) configured in
+`C:\Tools\lazy-mcp\config.json`. This allows processing up to ~15 documents
+in a single pipeline call (at ~20s per document).
+
+For larger batches (15+ docs), split into multiple pipeline calls.
+
+---
 
 ## Troubleshooting
 
-- **Auth failure mid-batch**: Run `check_auth_status` first. If it fails, re-authenticate.
-- **Rate limit**: Free tier allows ~50 queries/day. For large batches, split across days.
-- **Large files**: Files >500KB may timeout. Consider splitting or summarizing first.
+| Issue | Solution |
+|-------|----------|
+| Auth expired | Run `check_auth_status`, then `save_auth_tokens` with fresh cookies |
+| Pipeline timeout | Reduce batch size or increase `toolTimeout` in lazy-mcp config |
+| Partial results | Pipeline saves incrementally — check `output_dir` for completed digests |
+| Empty answers | Source may be too short or NotebookLM couldn't parse it |
+
+---
+
+## Example Usage
+
+```
+# Turn 1
+check_auth_status → ✅ valid
+notebook_create("Feb 2013 Digests") → notebook_id: "abc-123"
+
+# Turn 2  
+notebook_digest_pipeline(
+    notebook_id="abc-123",
+    file_paths=[
+        "C:/cases/CIR v. San Roque.md",
+        "C:/cases/Cavite Apparel v. Marquez.md",
+        "C:/cases/Diaz v. People.md"
+    ],
+    output_dir="C:/output/2013"
+) → {status: "success", digests_saved: 3}
+```
