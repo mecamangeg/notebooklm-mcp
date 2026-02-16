@@ -44,7 +44,22 @@ All notebooks run this loop **concurrently** — true parallelism with zero cont
 ### Production Progress
 **Nothing has been processed yet.** All previous runs were tests saved in `C:\PROJECTS\notebooklm-mcp\2013\`. Production output goes to `C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\`.
 
-### Quick Start (Fresh Session)
+### Quick Start (Massive Batches - RECOMMENDED)
+
+For batches >15 files, use the **Standalone Runner** to bypass the 300s MCP proxy timeout.
+
+1. **Terminal**: Run the runner script directly via `uv`:
+   ```powershell
+   uv run notebooklm-mcp-runner.py `
+     --year "1996" --month "01_Jan" `
+     --corpus "escra"
+   ```
+2. **Features**:
+   - Bypasses 300s proxy timeout.
+   - Live colorized progress log.
+   - High-throughput (20 docs/min).
+
+### Quick Start (Small Batches via MCP)
 
 1. **Read this file** for full context
 2. **Check auth**: `notebooklm.check_auth_status` — if expired, run `notebooklm-mcp-auth` in terminal
@@ -62,24 +77,21 @@ All notebooks run this loop **concurrently** — true parallelism with zero cont
    $done = if (Test-Path $dst) { (Get-ChildItem $dst -File -Filter "*-case-digest.md").Count } else { 0 }
    Write-Output "Done: $done / $($files.Count)"
    ```
-6. **Run pipeline** (10 notebooks):
+6. **Run pipeline** (15 notebooks):
    ```
    notebooklm.notebook_digest_multi
-     notebook_ids: ["9daa06dc-b783-455a-b525-3c9cd3c36b9e", "d30bc801-da43-4e32-b044-bb1c0b6a20b4", "942b25a4-8528-4d50-bbf9-3915af267402", "42b27b34-ea16-4612-870b-84f9e40e296a", "599684ce-78f3-4bd2-a8c9-45c294160dfe", "a12b80e7-218f-438f-b7ec-411336ef40b7", "1b9ba80e-2d16-400d-a842-c465da2cfc10", "dd098ff4-c18c-412c-8cde-6cb685f78ec9", "a3b742e7-db9a-4f71-8efe-06c3fb88bfe9", "aa931c7c-a6b6-46b4-99db-843337440d3c"]
-     file_paths: [... all files from step 4 ...]
+     notebook_ids: ["9daa06dc-b783-455a-b525-3c9cd3c36b9e", ..., "8b2a1455-3a0e-4b16-a574-2e0568ddea36"]
+     file_paths: [... filenames from step 4 ...]
      output_dir: "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\{YEAR}\{MM}_{Mon}"
    ```
-7. **Verify** output count matches input count
-8. **Move to next month** and repeat from step 4
 
 ### Important Operational Notes
 
-- **MCP Tool**: Use `notebooklm.notebook_digest_multi` via the lazy-mcp proxy (`mcp_lazy-mcp_execute_tool`)
-- **Timeout**: The proxy has a 300s timeout. Large months (100+ files) may need multiple calls — resume auto-skips completed valid files
-- **Auth expires**: If you get "Cookies have expired", run `notebooklm-mcp-auth` in terminal
-- **LIFO cleanup**: Sources are deleted after each case. Notebooks never accumulate sources — reuse indefinitely
-- **batch_size**: Always 1 (hardcoded). Each case is processed individually for maximum reliability
-- **Install changes**: After editing `server.py`, you MUST run `uv tool install --force --reinstall "C:\PROJECTS\notebooklm-mcp"`. The `--reinstall` flag is required or changes won't take effect
+- **Standalone Runner**: Bypasses the 300s MCP timeout. Use this for whole years/volumes.
+- **Timeout**: The proxy has a 300s timeout. Use the runner script for large batches.
+- **Auth expires**: If you get "Cookies have expired", run `notebooklm-mcp-auth` in terminal.
+- **LIFO cleanup**: Sources are deleted after each case. Notebooks never accumulate sources — reuse indefinitely.
+- **BL Sync**: Keep `api_client.py` synchronized with the latest Google Build Label (see `KNOWN_ISSUES.md`).
 
 ---
 
@@ -247,9 +259,10 @@ C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\
 |--------|-------|
 | Total files | ~31,832 |
 | Notebooks | 15 (concurrent) |
-| Per-doc wall time | ~5.7s (effective) |
+| Per-doc wall time | ~3.1s (effective) |
 | Batch of 15 files | ~47s |
-| Est. full corpus (15 NB) | **~10 hours** |
+| Throughput | **20 docs / min** |
+| Est. full corpus (15 NB) | **~26 hours** |
 
 ### Performance Benchmarks (2026-02-16)
 

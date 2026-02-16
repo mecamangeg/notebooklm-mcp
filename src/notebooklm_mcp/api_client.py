@@ -974,6 +974,7 @@ class NotebookLMClient:
     def add_text_source(self, notebook_id: str, text: str, title: str = "Pasted Text") -> dict | None:
         """Add pasted text as a source to a notebook.
     """
+        import sys
         client = self._get_client()
 
         # Text source params structure:
@@ -988,8 +989,20 @@ class NotebookLMClient:
         source_path = f"/notebook/{notebook_id}"
         url_endpoint = self._build_url(self.RPC_ADD_SOURCE, source_path)
 
-        response = client.post(url_endpoint, content=body)
-        response.raise_for_status()
+        try:
+            response = client.post(url_endpoint, content=body)
+        except Exception as e:
+            print(f"[add_text_source] HTTP request failed: {e}", file=sys.stderr, flush=True)
+            return None
+
+        if response.status_code != 200:
+            print(
+                f"[add_text_source] HTTP {response.status_code} for '{title[:40]}' "
+                f"(notebook={notebook_id[:8]}…). "
+                f"Response snippet: {response.text[:200]}",
+                file=sys.stderr, flush=True,
+            )
+            return None
 
         parsed = self._parse_response(response.text)
         result = self._extract_rpc_result(parsed, self.RPC_ADD_SOURCE)
@@ -1001,6 +1014,14 @@ class NotebookLMClient:
                 source_id = source_data[0][0] if source_data[0] else None
                 source_title = source_data[1] if len(source_data) > 1 else title
                 return {"id": source_id, "title": source_title}
+
+        # Log why we got None so diagnosis is possible
+        print(
+            f"[add_text_source] Unexpected response structure for '{title[:40]}'. "
+            f"result type={type(result).__name__}, "
+            f"result snippet={str(result)[:300]}",
+            file=sys.stderr, flush=True,
+        )
         return None
 
     def add_drive_source(

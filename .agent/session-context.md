@@ -223,6 +223,36 @@ mcp_lazy-mcp_execute_tool
 
 ---
 
+## Resolved Bugs (for reference)
+
+1. **Split mismatch** → Switched to 1:1 architecture (batch_size=1)
+2. **Truncated digests saved** → Validate before save + content-validated resume
+3. **Source leak on error** → LIFO cleanup in `finally` block
+4. **Output dir race condition** → `os.makedirs(exist_ok=True)` before each save
+5. **uv install cache trap** → Must use `--force --reinstall` or uninstall+reinstall
+6. **Frontmatter `---` in body** → Regex-based parser instead of `split("---", 2)`
+7. **File path mismatch** → Always resolve from disk, never hand-type
+8. **Runner `FunctionTool` error** → Access original function via `.fn` in `FastMCP`
+
+---
+
+## v2.0-multi-corpus (2026-02-16)
+
+Added support for e-SCRA corpus profile.
+
+### Changes
+- **Auto-detection**: Probes frontmatter for `source_type: "SCRA"` (e-SCRA) vs `doc_id` (e-Library).
+- **Field Mapping**: e-SCRA uses `short_title` for clean titles, e-Library uses `abridged_title`.
+- **Standalone Runner**: `notebooklm-mcp-runner.py` for high-throughput volume processing without MCP proxy timeouts.
+- **Improved Paths**: Always use disk-resolved absolute paths to avoid encoding/mismatch errors.
+
+### Production Run Status
+- **Volume_001**: 195 files. In progress.
+- **Volumes completed**: 0/1026
+- **Total files processed**: ~50 / 53,351
+
+---
+
 ## Test Artifacts on Disk
 
 | Directory | Contents | Status |
@@ -236,18 +266,6 @@ mcp_lazy-mcp_execute_tool
 | `2013/jan_paths.json` | Actual Jan 2013 file paths from disk | Utility |
 | `2013/run_scale_test.py` | Python scale test runner (doesn't work — FunctionTool not callable) | Utility |
 | `CASE-DIGESTS/` | Empty — production output directory | Ready |
-
----
-
-## Resolved Bugs (for reference)
-
-1. **Split mismatch** → Switched to 1:1 architecture (batch_size=1)
-2. **Truncated digests saved** → Validate before save + content-validated resume
-3. **Source leak on error** → LIFO cleanup in `finally` block
-4. **Output dir race condition** → `os.makedirs(exist_ok=True)` before each save
-5. **uv install cache trap** → Must use `--force --reinstall` or uninstall+reinstall
-6. **Frontmatter `---` in body** → Regex-based parser instead of `split("---", 2)`
-7. **File path mismatch** → Always resolve from disk, never hand-type
 
 ---
 
