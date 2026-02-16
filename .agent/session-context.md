@@ -123,12 +123,70 @@ The lazy-mcp proxy has a 300-second timeout. For >15 files, the MCP call will ti
 ### 3. File Path Resolution
 **ALWAYS resolve file paths from disk** using `Get-ChildItem`. Never manually type filenames. The corpus filenames contain commas, periods, ampersands, and parentheses that are easily mistyped. The pipeline reports "File not found" for any path mismatch.
 
-### 4. Authentication
-NotebookLM cookies expire periodically. If you get "Cookies have expired":
+### 4. Authentication & Cookie Troubleshooting
+
+NotebookLM has **no official API** — it uses reverse-engineered browser cookies. There are 3 auth methods:
+
+#### Method A: Auto Mode (recommended — what we used)
 ```powershell
 notebooklm-mcp-auth
 ```
-Log in to the Chrome window. Wait for "SUCCESS".
+- Creates a dedicated Chrome profile at `~/.notebooklm-mcp/chrome-profile/`
+- Launches Chrome with remote debugging on port 9222
+- Navigates to `notebooklm.google.com`, waits for login
+- Extracts all 16 cookies + CSRF token + session ID
+- Saves to `~/.notebooklm-mcp/auth.json`
+- **Prerequisite**: Chrome must be **completely closed** first (not just minimized — fully quit)
+- Subsequent runs skip login (profile persists Google session)
+
+#### Method B: File Mode (if auto mode fails)
+```powershell
+notebooklm-mcp-auth --file
+```
+Manual extraction steps:
+1. Open Chrome → `https://notebooklm.google.com` → log in
+2. F12 → **Network** tab → filter `batchexecute`
+3. Click any notebook to trigger a request
+4. Click the `batchexecute` request → **Request Headers** → find `cookie:`
+5. Right-click the cookie **value** (not the header name!) → **Copy value**
+6. Paste into a `.txt` file, save
+7. Provide the path when prompted
+
+#### Method C: Environment Variable (manual fallback)
+```powershell
+$env:NOTEBOOKLM_COOKIES = "SID=xxx; HSID=xxx; SSID=xxx; APISID=xxx; SAPISID=xxx; ..."
+```
+
+#### Required Cookies (all 5 must be present)
+`SID`, `HSID`, `SSID`, `APISID`, `SAPISID`
+
+#### Token Storage Locations
+```
+~/.notebooklm-mcp/
+├── auth.json           ← Cached cookies, CSRF, session ID
+└── chrome-profile/     ← Persistent Chrome profile (stays logged in)
+```
+
+#### Common Auth Problems
+
+| Problem | Symptom | Fix |
+|---------|---------|-----|
+| Chrome still running | `"Chrome is running but without remote debugging"` | Fully quit Chrome (Ctrl+Q / taskbar quit), retry |
+| Cookies expired | `"Cookies have expired"` or 401/403 | Re-run `notebooklm-mcp-auth` |
+| Missing required cookies | `"missing required cookies"` | Copied partial value — need all 5 required cookies |
+| Stale BL version | API calls fail with weird errors | Set `$env:NOTEBOOKLM_BL` (see below) |
+| Antigravity IDE Chrome | Chrome opens with wrong branding | Use `--file` mode |
+| Cookie format wrong | Copied `cookie: SID=...` with header prefix | Copy value only, not `cookie:` prefix |
+
+#### BL Version String
+The `bl` (build label) parameter is hardcoded in `api_client.py` as `boq_labs-tailwind-frontend_20251221.14_p0`. When Google deploys new frontend versions, override with:
+```powershell
+$env:NOTEBOOKLM_BL = "boq_labs-tailwind-frontend_YYYYMMDD.XX_p0"
+```
+Find current value: Chrome DevTools → Network → any `batchexecute` request → look for `bl=` in the URL.
+
+#### How Our Setup Works (lazy-mcp config)
+The notebooklm server is registered in `C:\Tools\lazy-mcp\config.json` (line 100-109). It launches `notebooklm-mcp.exe` with **no env vars** — relies entirely on `~/.notebooklm-mcp/auth.json`. The other engineer must run `notebooklm-mcp-auth` at least once on their machine.
 
 ### 5. MCP Tool Access
 The pipeline is accessed via the lazy-mcp proxy:

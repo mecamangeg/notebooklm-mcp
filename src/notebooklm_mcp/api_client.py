@@ -365,7 +365,7 @@ class NotebookLMClient:
         params = {
             "rpcids": rpc_id,
             "source-path": source_path,
-            "bl": os.environ.get("NOTEBOOKLM_BL", "boq_labs-tailwind-frontend_20251221.14_p0"),
+            "bl": os.environ.get("NOTEBOOKLM_BL", "boq_labs-tailwind-frontend_20260212.13_p0"),
             "hl": "en",
             "rt": "c",
         }
@@ -1128,7 +1128,7 @@ class NotebookLMClient:
 
         self._reqid_counter += 100000  # Increment counter
         url_params = {
-            "bl": os.environ.get("NOTEBOOKLM_BL", "boq_labs-tailwind-frontend_20251221.14_p0"),
+            "bl": os.environ.get("NOTEBOOKLM_BL", "boq_labs-tailwind-frontend_20260212.13_p0"),
             "hl": "en",
             "_reqid": str(self._reqid_counter),
             "rt": "c",

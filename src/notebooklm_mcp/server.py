@@ -2141,6 +2141,43 @@ DEFAULT_DIGEST_QUERY = (
     "- The SHORT_TITLE line MUST be the very first line of your response."
 )
 
+# ── Corpus Profile Abstraction ─────────────────────────────────
+# Maps corpus-specific field names for frontmatter handling.
+# Auto-detected from each file's frontmatter, or overridden via corpus_type param.
+
+CORPUS_PROFILES = {
+    "elibrary": {
+        "label": "SC e-Library",
+        "short_title_field": "abridged_title",
+        "extra_fields": [
+            "doc_id", "phil_citation", "scra_citation",
+            "word_count", "source_url", "citation_format",
+        ],
+    },
+    "escra": {
+        "label": "e-SCRA",
+        "short_title_field": "short_title",
+        "extra_fields": [
+            "case_nature", "disposition",
+            "source_type", "source_file",
+        ],
+    },
+    "generic": {
+        "label": "Generic",
+        "short_title_field": "short_title",
+        "extra_fields": [],
+    },
+}
+
+
+def _detect_corpus(frontmatter: dict) -> str:
+    """Auto-detect corpus type from frontmatter fields."""
+    if frontmatter.get("source_type") == "SCRA":
+        return "escra"
+    if "doc_id" in frontmatter:
+        return "elibrary"
+    return "generic"
+
 
 @mcp.tool()
 def notebook_query_save(
@@ -2524,6 +2561,7 @@ def notebook_digest_multi(
     file_paths: list[str],
     output_dir: str,
     query_template: str = DEFAULT_DIGEST_QUERY,
+    corpus_type: str = "auto",
     batch_size: int = 1,
     max_retries: int = 3,
     delay: float = 1.0,
@@ -2551,6 +2589,7 @@ def notebook_digest_multi(
         file_paths: List of absolute file paths to process
         output_dir: Directory to save digest .md files
         query_template: Query template (default: Madera case digest)
+        corpus_type: Corpus type — "auto" (detect from frontmatter), "elibrary", "escra", "generic"
         batch_size: Not used (kept for API compat, always processes 1 at a time)
         max_retries: Retry attempts per query (default: 2)
         delay: Seconds between staggered starts (default: 1.0)
@@ -2788,10 +2827,18 @@ def notebook_digest_multi(
 
                 # ── Build output with preserved frontmatter ──
                 output_content = digest_body
+                # Detect corpus profile for field mapping
+                if corpus_type == "auto":
+                    _detected = _detect_corpus(frontmatter) if frontmatter else "generic"
+                else:
+                    _detected = corpus_type
+                _profile = CORPUS_PROFILES.get(_detected, CORPUS_PROFILES["generic"])
+
                 if frontmatter:
-                    # Update abridged_title with corrected short title
+                    # Update the correct short title field based on corpus profile
                     if short_title:
-                        frontmatter["abridged_title"] = short_title
+                        _st_field = _profile["short_title_field"]
+                        frontmatter[_st_field] = short_title
                     fm_lines = ["---"]
                     for key, val in frontmatter.items():
                         # Quote string values
@@ -2809,7 +2856,7 @@ def notebook_digest_multi(
                 with _progress_lock:
                     _progress["done"] += 1
                     _progress["success"] += 1
-                st_display = short_title or frontmatter.get("abridged_title", item["title"][:30])
+                st_display = short_title or frontmatter.get(_profile["short_title_field"], item["title"][:30])
                 _log_progress(
                     f"NB{nb_idx}: ✅ {_progress['done']}/{n_files} "
                     f"{st_display}"
@@ -2817,7 +2864,7 @@ def notebook_digest_multi(
                 chunk_results.append({
                     **item, "status": "success",
                     "output_size": len(output_content.encode("utf-8")),
-                    "short_title": short_title or frontmatter.get("abridged_title", ""),
+                    "short_title": short_title or frontmatter.get(_profile["short_title_field"], ""),
                 })
 
             except Exception as e:
