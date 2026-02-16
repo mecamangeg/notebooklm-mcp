@@ -17,7 +17,7 @@ These 3 notebooks were created and tested. They use LIFO source management — s
 | Worker 2 | `d30bc801-da43-4e32-b044-bb1c0b6a20b4` | ✅ Tested, clean |
 | Worker 3 | `942b25a4-8528-4d50-bbf9-3915af267402` | ✅ Tested, clean |
 | Worker 4 | `42b27b34-ea16-4612-870b-84f9e40e296a` | ✅ User-provided |
-| Worker 5 | `5ee19729-8dd3-4220-831d-0f2e7788f306` | ✅ Created, clean |
+| Worker 5 | `599684ce-78f3-4bd2-a8c9-45c294160dfe` | ✅ User-provided |
 
 ### Production Progress
 **Nothing has been processed yet.** All previous runs were tests saved in `C:\PROJECTS\notebooklm-mcp\2013\` (v2-test, v3-test, multi-notebook-test, lifo-test). Production output goes to `C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\`.
@@ -43,7 +43,7 @@ These 3 notebooks were created and tested. They use LIFO source management — s
 6. **Run pipeline**:
    ```
    notebooklm.notebook_digest_multi
-     notebook_ids: ["9daa06dc-b783-455a-b525-3c9cd3c36b9e", "d30bc801-da43-4e32-b044-bb1c0b6a20b4", "942b25a4-8528-4d50-bbf9-3915af267402", "42b27b34-ea16-4612-870b-84f9e40e296a", "5ee19729-8dd3-4220-831d-0f2e7788f306"]
+     notebook_ids: ["9daa06dc-b783-455a-b525-3c9cd3c36b9e", "d30bc801-da43-4e32-b044-bb1c0b6a20b4", "942b25a4-8528-4d50-bbf9-3915af267402", "42b27b34-ea16-4612-870b-84f9e40e296a", "599684ce-78f3-4bd2-a8c9-45c294160dfe"]
      file_paths: [... all files from step 4 ...]
      output_dir: "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\{YEAR}\{MM}_{Mon}"
      batch_size: 3
