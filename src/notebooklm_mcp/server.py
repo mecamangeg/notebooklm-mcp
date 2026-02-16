@@ -2192,23 +2192,28 @@ def notebook_digest_pipeline(
     output_dir: str,
     query_template: str = DEFAULT_DIGEST_QUERY,
     titles: list[str] | None = None,
+    max_retries: int = 2,
 ) -> dict[str, Any]:
     """Full pipeline: reads files from disk → adds as sources → queries each → saves digests.
 
     This is the OPTIMAL tool for batch case digest generation. The agent only sees
     metadata — no document text or digest content passes through the context window.
 
-    Processes files sequentially and saves results incrementally, so partial results
-    are preserved even if the pipeline times out.
+    Features:
+    - Per-document retry: if a query fails, retries up to max_retries times
+    - Resume on re-run: skips files whose digest already exists in output_dir
+    - Incremental saves: partial results are preserved even if pipeline times out
 
     Args:
         notebook_id: Notebook UUID
         file_paths: List of absolute file paths to process
         output_dir: Directory to save digest .md files
-        query_template: Query to use for each source (default: case digest prompt)
+        query_template: Query to use for each source (default: Madera case digest)
         titles: Optional list of titles (one per file). Defaults to filename.
+        max_retries: Max retry attempts per document for failed queries (default: 2)
     """
     import os
+    import time
 
     if not file_paths:
         return {"status": "error", "error": "No file paths provided"}
@@ -2223,6 +2228,7 @@ def notebook_digest_pipeline(
     results = []
     add_success = 0
     query_success = 0
+    skipped = 0
     total = len(file_paths)
 
     for i, path in enumerate(file_paths):
@@ -2233,6 +2239,28 @@ def notebook_digest_pipeline(
             title = os.path.splitext(os.path.basename(path))[0]
 
         entry = {"index": i, "title": title, "path": path}
+
+        # Compute output path early for resume check
+        safe_title = "".join(
+            c if c.isalnum() or c in " .-_()," else "_"
+            for c in title
+        ).strip()
+        if not safe_title:
+            safe_title = f"digest_{i}"
+        output_path = os.path.join(output_dir, f"{safe_title}-case-digest.md")
+
+        # Resume: skip if digest already exists on disk
+        if os.path.exists(output_path):
+            existing_size = os.path.getsize(output_path)
+            if existing_size > 100:  # Non-trivial file
+                entry["status"] = "skipped"
+                entry["output_path"] = output_path
+                entry["output_size"] = existing_size
+                entry["reason"] = "Digest already exists"
+                skipped += 1
+                query_success += 1  # Count as success for summary
+                results.append(entry)
+                continue
 
         # Step 1: Read and add the file
         if not os.path.exists(path):
@@ -2273,43 +2301,45 @@ def notebook_digest_pipeline(
             results.append(entry)
             continue
 
-        # Step 2: Query for digest
-        try:
-            query_result = client.query(
-                notebook_id,
-                query_text=query_template,
-                source_ids=[source_id],
-            )
+        # Step 2: Query for digest (with retry)
+        last_error = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                query_result = client.query(
+                    notebook_id,
+                    query_text=query_template,
+                    source_ids=[source_id],
+                )
 
-            if not query_result or not query_result.get("answer"):
-                entry["status"] = "partial"
-                entry["error"] = "Source added but query returned no answer"
-                results.append(entry)
-                continue
+                if not query_result or not query_result.get("answer"):
+                    last_error = "Query returned no answer"
+                    if attempt < max_retries:
+                        time.sleep(2)  # Brief pause before retry
+                    continue
 
-            answer = query_result["answer"]
+                answer = query_result["answer"]
 
-            # Step 3: Save to disk
-            # Use a sanitized filename
-            safe_title = "".join(
-                c if c.isalnum() or c in " .-_()," else "_"
-                for c in title
-            ).strip()
-            if not safe_title:
-                safe_title = f"digest_{i}"
-            output_path = os.path.join(output_dir, f"{safe_title}-case-digest.md")
+                # Step 3: Save to disk
+                with open(output_path, "w", encoding="utf-8") as f:
+                    f.write(answer)
 
-            with open(output_path, "w", encoding="utf-8") as f:
-                f.write(answer)
+                entry["status"] = "success"
+                entry["output_path"] = output_path
+                entry["output_size"] = len(answer.encode("utf-8"))
+                entry["attempts"] = attempt
+                query_success += 1
+                last_error = None
+                break  # Success — exit retry loop
 
-            entry["status"] = "success"
-            entry["output_path"] = output_path
-            entry["output_size"] = len(answer.encode("utf-8"))
-            query_success += 1
+            except Exception as e:
+                last_error = str(e)
+                if attempt < max_retries:
+                    time.sleep(2)
 
-        except Exception as e:
+        if last_error:
             entry["status"] = "partial"
-            entry["error"] = f"Source added but query failed: {e}"
+            entry["error"] = f"Query failed after {max_retries} attempts: {last_error}"
+            entry["attempts"] = max_retries
 
         results.append(entry)
 
@@ -2319,6 +2349,7 @@ def notebook_digest_pipeline(
             "total": total,
             "sources_added": add_success,
             "digests_saved": query_success,
+            "skipped": skipped,
             "failed": total - query_success,
         },
         "results": results,
