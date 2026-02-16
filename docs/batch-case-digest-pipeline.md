@@ -33,6 +33,11 @@ All notebooks run this loop **concurrently** — true parallelism with zero cont
 | Worker 8 | Notebook8 | `dd098ff4-c18c-412c-8cde-6cb685f78ec9` | ✅ Ready |
 | Worker 9 | Notebook9 | `a3b742e7-db9a-4f71-8efe-06c3fb88bfe9` | ✅ Ready |
 | Worker 10 | Notebook10 | `aa931c7c-a6b6-46b4-99db-843337440d3c` | ✅ Ready |
+| Worker 11 | Notebook11 | `7647a1bf-31fa-4d15-84a7-6e5ddf38094f` | ✅ Ready |
+| Worker 12 | Notebook12 | `cd58152e-163d-41e0-994d-e7d90ddeba75` | ✅ Ready |
+| Worker 13 | Notebook13 | `c35cd867-ce15-4893-8edf-94a1a3df9cd8` | ✅ Ready |
+| Worker 14 | Notebook14 | `363cba7e-15e3-4c69-ba4b-b4e78aa1e16d` | ✅ Ready |
+| Worker 15 | Notebook15 | `8b2a1455-3a0e-4b16-a574-2e0568ddea36` | ✅ Ready |
 
 > **Note**: Workers 1-3 have leftover sources from pre-LIFO test runs. These don't affect the pipeline — the `source_ids=[source_id]` parameter scopes each query to only the newly added source.
 
@@ -241,10 +246,9 @@ C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\
 | Metric | Value |
 |--------|-------|
 | Total files | ~31,832 |
-| Notebooks | 10 (concurrent) |
+| Notebooks | 15 (concurrent) |
 | Per-doc wall time | ~5.7s (effective) |
-| Batch of 10 files | ~57s |
-| Est. full corpus (10 NB) | **~15 hours** |
+| Batch of 15 files | ~47s |
 | Est. full corpus (15 NB) | **~10 hours** |
 
 ### Performance Benchmarks (2026-02-16)
@@ -252,7 +256,8 @@ C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\
 | Architecture | Notebooks | Files | Wall Time | Per Doc | Success Rate |
 |-------------|-----------|-------|-----------|---------|-------------|
 | Batch (v1, batch_size=3) | 3 | 9 | 55s | ~6s | **70-90%** (split errors) |
-| **1:1 (v3, batch_size=1)** | **10** | **10** | **57s** | **~5.7s** | **100%** |
+| 1:1 (v3, batch_size=1) | 10 | 10 | 57s | ~5.7s | **100%** |
+| **1:1 (v3, 15 notebooks)** | **15** | **15** | **47s** | **~3.1s** | **100%** |
 
 ---
 
@@ -262,7 +267,7 @@ C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `notebook_ids` | `list[str]` | required | List of notebook UUIDs (use 10) |
+| `notebook_ids` | `list[str]` | required | List of notebook UUIDs (use 15) |
 | `file_paths` | `list[str]` | required | Absolute paths to source `.md` files |
 | `output_dir` | `str` | required | Where to save digest files |
 | `query_template` | `str` | Madera format | Case digest prompt (includes SHORT_TITLE instruction) |
@@ -277,7 +282,21 @@ C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\
 - **Response validation**: Only saves digests that pass quality checks
 - **Metadata preservation**: YAML frontmatter from source files carried to output
 - **Short title correction**: NotebookLM generates corrected `abridged_title`
+- **Progress reporting**: Timestamped log to stderr with per-file success/failure status
+- **Rate limit monitoring**: Tracks queries/minute and total queries in summary
 - **Per-query retry**: Up to 3 attempts with 2s backoff
+
+### ⚠️ Critical: MCP Proxy Timeout (300s)
+The lazy-mcp proxy has a 300-second timeout. For >15 files, the MCP call will timeout before returning a response. **However, all digests are saved incrementally to disk — you lose only the summary JSON, not the work.**
+
+Workaround for large batches:
+1. Pass all files in one call
+2. If it times out, check disk: `(Get-ChildItem $dst -File -Filter "*-case-digest.md").Count`
+3. Re-run the same call — resume skips completed files
+4. Repeat until all files are processed
+
+### ⚠️ Critical: File Path Resolution
+**Always resolve file paths from disk** using `Get-ChildItem`, never manually type them. Filenames in this corpus contain commas, periods, ampersands, and parentheses that are easily mistyped. The pipeline will report "File not found" for any path mismatch.
 
 ---
 
