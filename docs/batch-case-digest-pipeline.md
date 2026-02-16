@@ -1,8 +1,65 @@
 # Batch Case Digest Pipeline — Agent Instructions
 
 > **Purpose**: Process all 31,832 Supreme Court case `.md` files into individual case digests using NotebookLM's multi-notebook parallel pipeline.
+> 
+> **Last updated**: 2026-02-16 11:35 PHT
 
 ---
+
+## ⚡ Session Context (READ FIRST)
+
+### Existing Worker Notebooks (REUSE THESE)
+These 3 notebooks were created and tested. They use LIFO source management — sources are auto-deleted after each batch, so they **never fill up**.
+
+| Notebook | ID | Status |
+|----------|-----|--------|
+| Worker 1 | `9daa06dc-b783-455a-b525-3c9cd3c36b9e` | ✅ Tested, clean |
+| Worker 2 | `d30bc801-da43-4e32-b044-bb1c0b6a20b4` | ✅ Tested, clean |
+| Worker 3 | `942b25a4-8528-4d50-bbf9-3915af267402` | ✅ Tested, clean |
+| Worker 4 | `42b27b34-ea16-4612-870b-84f9e40e296a` | ✅ User-provided |
+| Worker 5 | `5ee19729-8dd3-4220-831d-0f2e7788f306` | ✅ Created, clean |
+
+### Production Progress
+**Nothing has been processed yet.** All previous runs were tests saved in `C:\PROJECTS\notebooklm-mcp\2013\` (v2-test, v3-test, multi-notebook-test, lifo-test). Production output goes to `C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\`.
+
+### Quick Start (Fresh Session)
+
+1. **Read this file** for full context
+2. **Check auth**: `notebooklm.check_auth_status` — if expired, run `notebooklm-mcp-auth` in terminal
+3. **Pick the next year/month** to process (start from 1996/01_Jan)
+4. **List source files**:
+   ```powershell
+   $year = "1996"; $month = "01_Jan"
+   $src = "C:\PROJECTS\supreme-court-scraper\MARKDOWN\markdown\$year\$month"
+   $files = (Get-ChildItem $src -File -Filter "*.md").FullName
+   Write-Output "$($files.Count) files to process"
+   ```
+5. **Check progress** (resume support):
+   ```powershell
+   $dst = "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\$year\$month"
+   $done = if (Test-Path $dst) { (Get-ChildItem $dst -File -Filter "*-case-digest.md").Count } else { 0 }
+   Write-Output "Done: $done / $($files.Count)"
+   ```
+6. **Run pipeline**:
+   ```
+   notebooklm.notebook_digest_multi
+     notebook_ids: ["9daa06dc-b783-455a-b525-3c9cd3c36b9e", "d30bc801-da43-4e32-b044-bb1c0b6a20b4", "942b25a4-8528-4d50-bbf9-3915af267402", "42b27b34-ea16-4612-870b-84f9e40e296a", "5ee19729-8dd3-4220-831d-0f2e7788f306"]
+     file_paths: [... all files from step 4 ...]
+     output_dir: "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\{YEAR}\{MM}_{Mon}"
+     batch_size: 3
+   ```
+7. **Verify** output count matches input count
+8. **Move to next month** and repeat from step 4
+
+### Important Operational Notes
+
+- **MCP Tool**: Use `notebooklm.notebook_digest_multi` via the lazy-mcp proxy (`mcp_lazy-mcp_execute_tool`)
+- **Timeout**: The proxy has a 300s timeout for notebooklm. Large months (100+ files) may need multiple calls — the resume feature auto-skips completed files
+- **Auth expires**: NotebookLM cookies expire periodically. If you get "Cookies have expired", run `notebooklm-mcp-auth` in terminal and have the user log in
+- **LIFO cleanup**: Sources are deleted after each batch query. The 3 worker notebooks never accumulate sources — reuse them indefinitely
+- **Batch size**: Default 3 cases per query. NotebookLM handles multi-case queries well (tested: produces separate digests with `---` separators)
+
+
 
 ## Directory Layout
 
@@ -28,17 +85,17 @@ The output mirrors the source structure exactly. Each digest file has the suffix
 
 ## Scale
 
-| Year Range | Years | Approx Files | Est. Time (3 notebooks) |
+| Year Range | Years | Approx Files | Est. Time (5 notebooks) |
 |------------|-------|-------------|------------------------|
-| 1996–2000  | 5     | ~5,198      | ~58 min                |
-| 2001–2005  | 5     | ~6,496      | ~72 min                |
-| 2006–2010  | 5     | ~7,023      | ~78 min                |
-| 2011–2015  | 5     | ~4,918      | ~55 min                |
-| 2016–2020  | 5     | ~5,327      | ~59 min                |
-| 2021–2025  | 5     | ~2,870      | ~32 min                |
-| **Total**  | **30**| **~31,832** | **~6 hours**           |
+| 1996–2000  | 5     | ~5,198      | ~35 min                |
+| 2001–2005  | 5     | ~6,496      | ~43 min                |
+| 2006–2010  | 5     | ~7,023      | ~47 min                |
+| 2011–2015  | 5     | ~4,918      | ~33 min                |
+| 2016–2020  | 5     | ~5,327      | ~36 min                |
+| 2021–2025  | 5     | ~2,870      | ~19 min                |
+| **Total**  | **30**| **~31,832** | **~3.5 hours**         |
 
-*Estimates based on benchmark: 9 docs / 55s = ~6s per doc with 3 notebooks.*
+*Estimates based on benchmark: ~3.6s per doc with 5 notebooks (projected from 6s/doc with 3 notebooks).*
 
 ---
 
@@ -56,15 +113,17 @@ notebooklm-mcp-auth
 Log in to Google in the Chrome window that opens. Wait for "SUCCESS" message.
 
 ### 2. Create 3 Worker Notebooks
-Create 3 dedicated notebooks for the pipeline. These are **permanently reusable** — the pipeline uses LIFO source management (add → query → delete) so notebooks never accumulate sources.
+Create 5 dedicated notebooks for the pipeline. These are **permanently reusable** — the pipeline uses LIFO source management (add → query → delete) so notebooks never accumulate sources.
 
 ```
 notebooklm.notebook_create  →  title: "Digest Worker 1"
 notebooklm.notebook_create  →  title: "Digest Worker 2"
 notebooklm.notebook_create  →  title: "Digest Worker 3"
+notebooklm.notebook_create  →  title: "Digest Worker 4"
+notebooklm.notebook_create  →  title: "Digest Worker 5"
 ```
 
-Save the 3 notebook IDs. You will reuse them **for the entire 31,832-file run**.
+Save the 5 notebook IDs. You will reuse them **for the entire 31,832-file run**.
 
 > **Source Lifecycle (LIFO)**: Each batch cycle adds `batch_size` sources, queries them, saves digests, then **immediately deletes** those sources. The notebook never exceeds `batch_size` sources at any time, well under the 50-source limit.
 
@@ -121,7 +180,7 @@ Distributes files across multiple notebooks. Each notebook processes its share c
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `notebook_ids` | `list[str]` | required | List of notebook UUIDs (use 3 for optimal throughput) |
+| `notebook_ids` | `list[str]` | required | List of notebook UUIDs (use 5 for optimal throughput) |
 | `file_paths` | `list[str]` | required | Absolute paths to source `.md` files |
 | `output_dir` | `str` | required | Where to save digest files |
 | `query_template` | `str` | Madera format | Case digest prompt template |
@@ -129,7 +188,7 @@ Distributes files across multiple notebooks. Each notebook processes its share c
 | `max_retries` | `int` | 2 | Retry attempts per batch |
 | `delay` | `float` | 1.0 | Seconds between thread starts |
 
-**Performance**: ~6s per doc with 3 notebooks.
+**Performance**: ~3.6s per doc with 5 notebooks (~6s with 3).
 
 **Key features**:
 - **LIFO source management**: Add → query → save → delete per batch. Notebooks never accumulate sources.
@@ -161,13 +220,13 @@ Same as above but uses only 1 notebook. Use if multi-notebook is unavailable.
 Just pass all files in a single call:
 ```
 notebooklm.notebook_digest_multi
-  notebook_ids: ["{ID1}", "{ID2}", "{ID3}"]   ← same 3 notebooks always
+  notebook_ids: ["{ID1}", "{ID2}", "{ID3}", "{ID4}", "{ID5}"]   ← same 5 notebooks always
   file_paths: [... all 130 files ...]
   output_dir: "..."
   batch_size: 3
 ```
 
-The pipeline internally cycles: add 3 → query → save → delete 3 → add next 3 → ...
+The pipeline internally cycles per notebook: add 3 → query → save → delete 3 → add next 3 → ... (all 5 notebooks in parallel)
 
 ---
 
@@ -218,19 +277,18 @@ $src = "C:\PROJECTS\supreme-court-scraper\MARKDOWN\markdown\2013\01_Jan"
 $files = (Get-ChildItem $src -File -Filter "*.md").FullName
 # Result: 87 files
 
-# Step 2: Use the same 3 worker notebooks (created once, reused forever)
-# Worker 1: aaa..., Worker 2: bbb..., Worker 3: ccc...
+# Step 2: Use the same 5 worker notebooks (created once, reused forever)
 
 # Step 3: Process ALL 87 files in one call (LIFO handles source cleanup)
 notebooklm.notebook_digest_multi
-  notebook_ids: ["aaa...", "bbb...", "ccc..."]
+  notebook_ids: ["9daa06dc-...", "d30bc801-...", "942b25a4-...", "f849b21c-...", "5ee19729-..."]
   file_paths: [all 87 file paths]
   output_dir: "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\2013\01_Jan"
   batch_size: 3
 
-# Internally: each notebook processes ~29 files
-#   add 3 → query → save 3 → delete 3 → add next 3 → ... (10 cycles each)
-#   Total: ~10 batch queries × 20s / 3 notebooks = ~70s
+# Internally: each notebook processes ~18 files
+#   add 3 → query → save 3 → delete 3 → add next 3 → ... (6 cycles each)
+#   Total: ~6 batch queries × 20s / 5 notebooks = ~24s
 
 # Step 4: Verify
 $done = (Get-ChildItem "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\2013\01_Jan" -File).Count
