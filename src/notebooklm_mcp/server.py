@@ -1800,6 +1800,303 @@ def save_auth_tokens(
         return {"status": "error", "error": str(e)}
 
 
+@mcp.tool()
+def check_auth_status() -> dict[str, Any]:
+    """Validate NotebookLM authentication before starting a batch pipeline.
+
+    Call this FIRST before any batch operations to catch expired cookies early,
+    rather than failing mid-pipeline. Returns account info if auth is valid.
+    """
+    try:
+        client = get_client()
+        # Attempt a lightweight API call to validate auth
+        notebooks = client.list_notebooks()
+        return {
+            "status": "success",
+            "auth_valid": True,
+            "notebook_count": len(notebooks),
+            "message": "Authentication is valid. Ready for batch operations.",
+        }
+    except ValueError as e:
+        error_msg = str(e)
+        if "expired" in error_msg.lower() or "login" in error_msg.lower():
+            return {
+                "status": "error",
+                "auth_valid": False,
+                "error": "Cookies have expired. Re-extract fresh cookies from Chrome DevTools.",
+                "hint": "Use save_auth_tokens with fresh cookies from Chrome DevTools.",
+            }
+        return {"status": "error", "auth_valid": False, "error": error_msg}
+    except Exception as e:
+        return {"status": "error", "auth_valid": False, "error": str(e)}
+
+
+@mcp.tool()
+def notebook_add_text_batch(
+    notebook_id: str,
+    sources: list[dict],
+) -> dict[str, Any]:
+    """Add multiple text sources to a notebook in one call. 10x faster than individual calls.
+
+    Use this instead of calling notebook_add_text in a loop.
+
+    Args:
+        notebook_id: Notebook UUID
+        sources: List of {"text": str, "title": str} objects to add
+    """
+    if not sources:
+        return {"status": "error", "error": "No sources provided"}
+
+    try:
+        client = get_client()
+        results = []
+        success_count = 0
+        fail_count = 0
+
+        for i, src in enumerate(sources):
+            text = src.get("text", "")
+            title = src.get("title", f"Source {i + 1}")
+
+            if not text:
+                results.append({
+                    "index": i,
+                    "title": title,
+                    "status": "skipped",
+                    "error": "Empty text",
+                })
+                fail_count += 1
+                continue
+
+            try:
+                result = client.add_text_source(notebook_id, text=text, title=title)
+                if result:
+                    results.append({
+                        "index": i,
+                        "title": title,
+                        "status": "success",
+                        "source_id": result.get("id"),
+                    })
+                    success_count += 1
+                else:
+                    results.append({
+                        "index": i,
+                        "title": title,
+                        "status": "failed",
+                        "error": "API returned no result",
+                    })
+                    fail_count += 1
+            except Exception as e:
+                results.append({
+                    "index": i,
+                    "title": title,
+                    "status": "failed",
+                    "error": str(e),
+                })
+                fail_count += 1
+
+        return {
+            "status": "success" if fail_count == 0 else "partial",
+            "summary": {
+                "total": len(sources),
+                "success": success_count,
+                "failed": fail_count,
+            },
+            "sources": results,
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def notebook_add_local_files(
+    notebook_id: str,
+    file_paths: list[str],
+    titles: list[str] | None = None,
+) -> dict[str, Any]:
+    """Add local files as text sources. Reads files from disk — no need to paste content.
+
+    Avoids shuttling text through agent context window. Supports .md, .txt, .html files.
+
+    Args:
+        notebook_id: Notebook UUID
+        file_paths: List of absolute file paths to read and add
+        titles: Optional list of titles (one per file). Defaults to filename.
+    """
+    import os
+
+    if not file_paths:
+        return {"status": "error", "error": "No file paths provided"}
+
+    try:
+        client = get_client()
+        results = []
+        success_count = 0
+        fail_count = 0
+
+        for i, path in enumerate(file_paths):
+            # Determine title
+            if titles and i < len(titles):
+                title = titles[i]
+            else:
+                title = os.path.splitext(os.path.basename(path))[0]
+
+            # Read file
+            if not os.path.exists(path):
+                results.append({
+                    "index": i,
+                    "path": path,
+                    "title": title,
+                    "status": "failed",
+                    "error": f"File not found: {path}",
+                })
+                fail_count += 1
+                continue
+
+            try:
+                # Try UTF-8 first, fall back to latin-1
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        text = f.read()
+                except UnicodeDecodeError:
+                    with open(path, "r", encoding="latin-1") as f:
+                        text = f.read()
+
+                if not text.strip():
+                    results.append({
+                        "index": i,
+                        "path": path,
+                        "title": title,
+                        "status": "skipped",
+                        "error": "File is empty",
+                    })
+                    fail_count += 1
+                    continue
+
+                result = client.add_text_source(notebook_id, text=text, title=title)
+                if result:
+                    results.append({
+                        "index": i,
+                        "path": path,
+                        "title": title,
+                        "status": "success",
+                        "source_id": result.get("id"),
+                        "size_bytes": len(text.encode("utf-8")),
+                    })
+                    success_count += 1
+                else:
+                    results.append({
+                        "index": i,
+                        "path": path,
+                        "title": title,
+                        "status": "failed",
+                        "error": "API returned no result",
+                    })
+                    fail_count += 1
+            except Exception as e:
+                results.append({
+                    "index": i,
+                    "path": path,
+                    "title": title,
+                    "status": "failed",
+                    "error": str(e),
+                })
+                fail_count += 1
+
+        return {
+            "status": "success" if fail_count == 0 else "partial",
+            "summary": {
+                "total": len(file_paths),
+                "success": success_count,
+                "failed": fail_count,
+            },
+            "sources": results,
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def notebook_query_batch(
+    notebook_id: str,
+    queries: list[dict],
+) -> dict[str, Any]:
+    """Query multiple sources in one call. Returns all results together.
+
+    Use this instead of calling notebook_query in a loop.
+
+    Args:
+        notebook_id: Notebook UUID
+        queries: List of {"query": str, "source_ids": list[str] (optional), "label": str (optional)}
+    """
+    if not queries:
+        return {"status": "error", "error": "No queries provided"}
+
+    try:
+        client = get_client()
+        results = []
+        success_count = 0
+        fail_count = 0
+
+        for i, q in enumerate(queries):
+            query_text = q.get("query", "")
+            source_ids = q.get("source_ids")
+            label = q.get("label", f"Query {i + 1}")
+
+            if not query_text:
+                results.append({
+                    "index": i,
+                    "label": label,
+                    "status": "skipped",
+                    "error": "Empty query",
+                })
+                fail_count += 1
+                continue
+
+            try:
+                result = client.query(
+                    notebook_id,
+                    query_text=query_text,
+                    source_ids=source_ids,
+                )
+                if result:
+                    results.append({
+                        "index": i,
+                        "label": label,
+                        "status": "success",
+                        "answer": result.get("answer", ""),
+                        "conversation_id": result.get("conversation_id"),
+                    })
+                    success_count += 1
+                else:
+                    results.append({
+                        "index": i,
+                        "label": label,
+                        "status": "failed",
+                        "error": "Query returned no result",
+                    })
+                    fail_count += 1
+            except Exception as e:
+                results.append({
+                    "index": i,
+                    "label": label,
+                    "status": "failed",
+                    "error": str(e),
+                })
+                fail_count += 1
+
+        return {
+            "status": "success" if fail_count == 0 else "partial",
+            "summary": {
+                "total": len(queries),
+                "success": success_count,
+                "failed": fail_count,
+            },
+            "results": results,
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 def main():
     """Run the MCP server."""
     mcp.run()

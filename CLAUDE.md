@@ -126,6 +126,10 @@ src/notebooklm_mcp/
 | `studio_status` | Check studio artifact generation status |
 | `studio_delete` | Delete studio artifacts (REQUIRES confirmation) |
 | `save_auth_tokens` | Save tokens extracted via Chrome DevTools MCP |
+| `check_auth_status` | Validate auth before batch operations |
+| `notebook_add_text_batch` | Add multiple text sources in one call (batch) |
+| `notebook_add_local_files` | Add local files as sources (reads from disk) |
+| `notebook_query_batch` | Query multiple sources in one call (batch) |
 
 **IMPORTANT - Operations Requiring Confirmation:**
 - `notebook_delete` requires `confirm=True` - deletion is IRREVERSIBLE

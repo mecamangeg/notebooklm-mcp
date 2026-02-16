@@ -92,5 +92,30 @@ uv run pytest tests/test_api_client.py
 ## Key Conventions
 
 - **Reverse Engineering:** This project relies on undocumented APIs. Changes to Google's internal API will break functionality.
-- **RPC Protocol:** The API uses Google's `batchexecute` protocol. Responses often contain "anti-XSSI" prefixes (`)]}'`) that must be stripped.
+- **RPC Protocol:** The API uses Google's `batchexecute` protocol. Responses often contain "anti-XSSI" prefixes (`)]}'\`) that must be stripped.
 - **Tools:** New features should be exposed as MCP tools in `server.py`.
+
+## Batch / Pipeline Optimization Tools
+
+The following tools were added to optimize high-throughput workflows (e.g., processing 10+ court cases for digest generation):
+
+| Tool | Purpose |
+|------|---------|
+| `check_auth_status` | Validate cookies BEFORE starting a batch — catch expiry early |
+| `notebook_add_text_batch` | Add N text sources in one call (vs N sequential calls) |
+| `notebook_add_local_files` | Read files from disk and add as sources — avoids agent context consumption |
+| `notebook_query_batch` | Query N sources in one call, returns all answers together |
+
+**Before (20+ agent turns for 10 docs):**
+```
+for each file:
+    view_file → notebook_add_text → notebook_query → write_to_file
+```
+
+**After (3-4 agent turns for 10 docs):**
+```
+check_auth_status → notebook_add_local_files → notebook_query_batch → save results
+```
+
+See `.agent/workflows/notebooklm-digest.md` for the full optimized workflow.
+
