@@ -2,27 +2,42 @@
 
 > **Purpose**: Process all 31,832 Supreme Court case `.md` files into individual case digests using NotebookLM's multi-notebook parallel pipeline.
 > 
-> **Last updated**: 2026-02-16 11:35 PHT
+> **Last updated**: 2026-02-16 12:24 PHT  
+> **Architecture version**: v3 — 1:1 (one case per notebook per cycle)
 
 ---
 
 ## ⚡ Session Context (READ FIRST)
 
+### Architecture: 1 Case → 1 Notebook → 1 Query → 1 Digest
+
+Each notebook processes **one case at a time** in a tight loop:
+```
+add 1 source → query "case digest" → validate → save with metadata → delete source → next
+```
+All notebooks run this loop **concurrently** — true parallelism with zero contention.
+
 ### Existing Worker Notebooks (REUSE THESE)
-These 3 notebooks were created and tested. They use LIFO source management — sources are auto-deleted after each batch, so they **never fill up**.
 
-| Notebook | Name | ID | Sources | Status |
-|----------|------|-----|---------|--------|
-| Worker 1 | Notebook1 | `9daa06dc-b783-455a-b525-3c9cd3c36b9e` | 14 (legacy) | ✅ Ready |
-| Worker 2 | Notebook2 | `d30bc801-da43-4e32-b044-bb1c0b6a20b4` | 3 (legacy) | ✅ Ready |
-| Worker 3 | Notebook3 | `942b25a4-8528-4d50-bbf9-3915af267402` | 3 (legacy) | ✅ Ready |
-| Worker 4 | Notebook4 | `42b27b34-ea16-4612-870b-84f9e40e296a` | 0 | ✅ Clean |
-| Worker 5 | Notebook5 | `599684ce-78f3-4bd2-a8c9-45c294160dfe` | 0 | ✅ Clean |
+10 notebooks created and tested. They use LIFO source management (add → query → delete) so they **never fill up**.
 
-> **Note**: Workers 1-3 have leftover sources from pre-LIFO test runs. These don't affect the pipeline — LIFO adds/deletes sources per batch, so existing sources are harmless. They can be manually cleaned via `notebooklm.source_delete` if desired.
+| Notebook | Name | ID | Status |
+|----------|------|-----|--------|
+| Worker 1 | Notebook1 | `9daa06dc-b783-455a-b525-3c9cd3c36b9e` | ✅ Ready |
+| Worker 2 | Notebook2 | `d30bc801-da43-4e32-b044-bb1c0b6a20b4` | ✅ Ready |
+| Worker 3 | Notebook3 | `942b25a4-8528-4d50-bbf9-3915af267402` | ✅ Ready |
+| Worker 4 | Notebook4 | `42b27b34-ea16-4612-870b-84f9e40e296a` | ✅ Ready |
+| Worker 5 | Notebook5 | `599684ce-78f3-4bd2-a8c9-45c294160dfe` | ✅ Ready |
+| Worker 6 | Notebook6 | `a12b80e7-218f-438f-b7ec-411336ef40b7` | ✅ Ready |
+| Worker 7 | Notebook7 | `1b9ba80e-2d16-400d-a842-c465da2cfc10` | ✅ Ready |
+| Worker 8 | Notebook8 | `dd098ff4-c18c-412c-8cde-6cb685f78ec9` | ✅ Ready |
+| Worker 9 | Notebook9 | `a3b742e7-db9a-4f71-8efe-06c3fb88bfe9` | ✅ Ready |
+| Worker 10 | Notebook10 | `aa931c7c-a6b6-46b4-99db-843337440d3c` | ✅ Ready |
+
+> **Note**: Workers 1-3 have leftover sources from pre-LIFO test runs. These don't affect the pipeline — the `source_ids=[source_id]` parameter scopes each query to only the newly added source.
 
 ### Production Progress
-**Nothing has been processed yet.** All previous runs were tests saved in `C:\PROJECTS\notebooklm-mcp\2013\` (v2-test, v3-test, multi-notebook-test, lifo-test). Production output goes to `C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\`.
+**Nothing has been processed yet.** All previous runs were tests saved in `C:\PROJECTS\notebooklm-mcp\2013\`. Production output goes to `C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\`.
 
 ### Quick Start (Fresh Session)
 
@@ -42,13 +57,12 @@ These 3 notebooks were created and tested. They use LIFO source management — s
    $done = if (Test-Path $dst) { (Get-ChildItem $dst -File -Filter "*-case-digest.md").Count } else { 0 }
    Write-Output "Done: $done / $($files.Count)"
    ```
-6. **Run pipeline**:
+6. **Run pipeline** (10 notebooks):
    ```
    notebooklm.notebook_digest_multi
-     notebook_ids: ["9daa06dc-b783-455a-b525-3c9cd3c36b9e", "d30bc801-da43-4e32-b044-bb1c0b6a20b4", "942b25a4-8528-4d50-bbf9-3915af267402", "42b27b34-ea16-4612-870b-84f9e40e296a", "599684ce-78f3-4bd2-a8c9-45c294160dfe"]
+     notebook_ids: ["9daa06dc-b783-455a-b525-3c9cd3c36b9e", "d30bc801-da43-4e32-b044-bb1c0b6a20b4", "942b25a4-8528-4d50-bbf9-3915af267402", "42b27b34-ea16-4612-870b-84f9e40e296a", "599684ce-78f3-4bd2-a8c9-45c294160dfe", "a12b80e7-218f-438f-b7ec-411336ef40b7", "1b9ba80e-2d16-400d-a842-c465da2cfc10", "dd098ff4-c18c-412c-8cde-6cb685f78ec9", "a3b742e7-db9a-4f71-8efe-06c3fb88bfe9", "aa931c7c-a6b6-46b4-99db-843337440d3c"]
      file_paths: [... all files from step 4 ...]
      output_dir: "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\{YEAR}\{MM}_{Mon}"
-     batch_size: 3
    ```
 7. **Verify** output count matches input count
 8. **Move to next month** and repeat from step 4
@@ -56,12 +70,151 @@ These 3 notebooks were created and tested. They use LIFO source management — s
 ### Important Operational Notes
 
 - **MCP Tool**: Use `notebooklm.notebook_digest_multi` via the lazy-mcp proxy (`mcp_lazy-mcp_execute_tool`)
-- **Timeout**: The proxy has a 300s timeout for notebooklm. Large months (100+ files) may need multiple calls — the resume feature auto-skips completed files
-- **Auth expires**: NotebookLM cookies expire periodically. If you get "Cookies have expired", run `notebooklm-mcp-auth` in terminal and have the user log in
-- **LIFO cleanup**: Sources are deleted after each batch query. The 3 worker notebooks never accumulate sources — reuse them indefinitely
-- **Batch size**: Default 3 cases per query. NotebookLM handles multi-case queries well (tested: produces separate digests with `---` separators)
+- **Timeout**: The proxy has a 300s timeout. Large months (100+ files) may need multiple calls — resume auto-skips completed valid files
+- **Auth expires**: If you get "Cookies have expired", run `notebooklm-mcp-auth` in terminal
+- **LIFO cleanup**: Sources are deleted after each case. Notebooks never accumulate sources — reuse indefinitely
+- **batch_size**: Always 1 (hardcoded). Each case is processed individually for maximum reliability
+- **Install changes**: After editing `server.py`, you MUST run `uv tool install --force --reinstall "C:\PROJECTS\notebooklm-mcp"`. The `--reinstall` flag is required or changes won't take effect
 
+---
 
+## Architecture: v3 — 1:1 Processing
+
+### Processing Flow (per notebook)
+```
+┌─────────────────────────────────────────────────────────┐
+│  For each case file assigned to this notebook:          │
+│                                                         │
+│  1. READ source file + parse YAML frontmatter           │
+│  2. ADD 1 source (the case text)                        │
+│  3. QUERY with source_ids=[that_one_source]             │
+│     → NotebookLM sees only 1 source                    │
+│  4. VALIDATE response (≥2 markers, ≥300 chars)          │
+│  5. EXTRACT SHORT_TITLE from first line of response     │
+│  6. BUILD output: frontmatter (with corrected title)    │
+│     + digest body                                       │
+│  7. SAVE to .md file                                    │
+│  8. DELETE that 1 source (back to 0)                    │
+│  9. → Next case file                                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Why 1:1 Instead of Batching
+
+| Issue | Batch approach (v1-v2) | 1:1 approach (v3) |
+|-------|----------------------|-------------------|
+| Split mismatch | Regex splitting failed 10-30% of the time | **No splitting needed** |
+| Partial saves | Truncated digests saved as "partial" | **Only validated digests saved** |
+| Resume skips bad files | `>100 bytes` check let corrupt files pass | **Content validation (structure markers)** |
+| Per-case isolation | Errors in one case could affect batch | **Complete isolation** |
+
+---
+
+## Reliability Features
+
+### 1. Content-Validated Resume
+On re-run, the pipeline skips a file **only if** the existing digest passes validation:
+- File exists AND is ≥500 bytes
+- Contains at least 2 of: `CAPTION`, `FACTS`, `ISSUE`, `RULING`
+
+This means truncated, corrupt, or empty files are **automatically reprocessed** on resume.
+
+### 2. Response Validation Before Save
+Before writing any digest to disk, the response is validated:
+- Must contain at least 2 structural markers (CAPTION, FACTS, ISSUE, RULING)
+- Must be at least 300 characters long
+
+If validation fails, the file is marked `failed` and NO file is written — guaranteeing that only valid digests exist on disk.
+
+### 3. LIFO Source Cleanup in `finally` Block
+The source deletion happens in a `finally` block, meaning it **always executes** even if:
+- The query fails
+- Validation fails
+- An exception is thrown
+- The process is interrupted
+
+This prevents source accumulation under any failure scenario.
+
+### 4. Retry with Backoff
+Each query retries up to 3 times (configurable) with 2-second delays between attempts. This handles transient NotebookLM API flakes like "No answer returned".
+
+### 5. Power Failure / Crash Recovery
+- Each digest is saved immediately after validation — no batch accumulation
+- On restart, resume picks up exactly where it left off
+- No rework: valid files are skipped, invalid/missing files are (re)processed
+- Source cleanup ensures notebooks aren't polluted
+
+---
+
+## Metadata Preservation & Short Title Correction
+
+### Source YAML Frontmatter
+Source `.md` files contain YAML frontmatter with 13 fields:
+```yaml
+---
+doc_id: "55710"
+docket_number: "G.R. No. 173926"
+title: "HEIRS OF LORENZO BUENSUCESO, REPRESENTED BY GERMAN BUENSUCESO..."
+abridged_title: "Heirs of Lorenzo Buensuceso,, et al. vs. Lovy Perez, Substituted by..."
+decision_date: "March 06, 2013"
+ponente: "BRION, J"
+division: "SECOND DIVISION"
+doc_type: "Decision"
+phil_citation: "705 Phil. 460"
+scra_citation: ""
+word_count: 4491
+source_url: "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/55710"
+citation_format: "G.R. No. 173926, March 06, 2013"
+---
+```
+
+### What the Pipeline Does
+1. **Parses** the YAML frontmatter from the source file
+2. **Asks NotebookLM** to generate a corrected short title (via `SHORT_TITLE:` instruction)
+3. **Updates** `abridged_title` in the frontmatter with the corrected version
+4. **Writes** the output file with the updated frontmatter + digest body
+
+### Short Title Correction Examples
+
+| Original `abridged_title` | Corrected by NotebookLM |
+|---|---|
+| `Heirs of Lorenzo Buensuceso,, et al. vs. Lovy Perez, Substituted by Erlinda Perez-hernandez` | **Heirs of Buensuceso v. Perez** |
+| `Manalangdemigillo vs. Trade and Investment Development Corp...` | **Manalang-Demigillo v. TIDCORP** |
+| `Philippine National Bank vs. Hydro Resources Contractors Corp.` | **PNB v. Hydro Resources** |
+| `Marcelino B. Agoy vs. NLRC, Eureka Personnel Management Services, Inc., Et. al.` | **Agoy v. NLRC** |
+
+### Output Format
+```markdown
+---
+doc_id: 55710
+docket_number: "G.R. No. 173926"
+title: "HEIRS OF LORENZO BUENSUCESO..."
+abridged_title: "Heirs of Buensuceso v. Perez"    ← corrected
+decision_date: "March 06, 2013"
+ponente: "BRION, J"
+division: "SECOND DIVISION"
+doc_type: "Decision"
+phil_citation: "705 Phil. 460"
+scra_citation: ""
+word_count: 4491
+source_url: "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/55710"
+citation_format: "G.R. No. 173926, March 06, 2013"
+---
+
+I. CAPTION
+**HEIRS OF BUENSUCESO v. PEREZ**, G.R. No. 173926, March 6, 2013, 705 Phil. 460, Brion, J.
+
+II. FACTS
+[Concise recitation of material facts]
+
+III. ISSUE/S
+W/N [issue statement]
+
+IV. RULING
+**YES/NO.** [Holding with ratio decidendi]
+```
+
+---
 
 ## Directory Layout
 
@@ -70,7 +223,7 @@ These 3 notebooks were created and tested. They use LIFO source management — s
 C:\PROJECTS\supreme-court-scraper\MARKDOWN\markdown\
   └── {YEAR}\           (1996–2025, 30 years)
         └── {MM}_{Mon}\  (e.g. 01_Jan, 02_Feb, ... 12_Dec)
-              └── *.md    (case decision files)
+              └── *.md    (case decision files with YAML frontmatter)
 ```
 
 ### Destination (output)
@@ -78,163 +231,71 @@ C:\PROJECTS\supreme-court-scraper\MARKDOWN\markdown\
 C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\
   └── {YEAR}\
         └── {MM}_{Mon}\
-              └── {filename}-case-digest.md
-```
-
-The output mirrors the source structure exactly. Each digest file has the suffix `-case-digest.md`.
-
----
-
-## Scale
-
-| Year Range | Years | Approx Files | Est. Time (5 notebooks) |
-|------------|-------|-------------|------------------------|
-| 1996–2000  | 5     | ~5,198      | ~35 min                |
-| 2001–2005  | 5     | ~6,496      | ~43 min                |
-| 2006–2010  | 5     | ~7,023      | ~47 min                |
-| 2011–2015  | 5     | ~4,918      | ~33 min                |
-| 2016–2020  | 5     | ~5,327      | ~36 min                |
-| 2021–2025  | 5     | ~2,870      | ~19 min                |
-| **Total**  | **30**| **~31,832** | **~3.5 hours**         |
-
-*Estimates based on benchmark: ~3.6s per doc with 5 notebooks (projected from 6s/doc with 3 notebooks).*
-
----
-
-## Prerequisites
-
-### 1. Authentication
-Before starting, verify cookies are fresh:
-```
-notebooklm.check_auth_status
-```
-If expired, run in terminal:
-```powershell
-notebooklm-mcp-auth
-```
-Log in to Google in the Chrome window that opens. Wait for "SUCCESS" message.
-
-### 2. Create 3 Worker Notebooks
-Create 5 dedicated notebooks for the pipeline. These are **permanently reusable** — the pipeline uses LIFO source management (add → query → delete) so notebooks never accumulate sources.
-
-```
-notebooklm.notebook_create  →  title: "Digest Worker 1"
-notebooklm.notebook_create  →  title: "Digest Worker 2"
-notebooklm.notebook_create  →  title: "Digest Worker 3"
-notebooklm.notebook_create  →  title: "Digest Worker 4"
-notebooklm.notebook_create  →  title: "Digest Worker 5"
-```
-
-Save the 5 notebook IDs. You will reuse them **for the entire 31,832-file run**.
-
-> **Source Lifecycle (LIFO)**: Each batch cycle adds `batch_size` sources, queries them, saves digests, then **immediately deletes** those sources. The notebook never exceeds `batch_size` sources at any time, well under the 50-source limit.
-
-### 3. Verify Output Directory Exists
-```powershell
-mkdir "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS" -Force
+              └── {filename}-case-digest.md  (frontmatter + digest)
 ```
 
 ---
 
-## Processing Strategy
+## Scale & Performance
 
-### Work Unit = One Month Folder
-Process **one month at a time**. This keeps batches manageable (50–130 files per month) and maps cleanly to the directory structure.
+| Metric | Value |
+|--------|-------|
+| Total files | ~31,832 |
+| Notebooks | 10 (concurrent) |
+| Per-doc wall time | ~5.7s (effective) |
+| Batch of 10 files | ~57s |
+| Est. full corpus (10 NB) | **~15 hours** |
+| Est. full corpus (15 NB) | **~10 hours** |
 
-### Recommended Approach: Month by Month
+### Performance Benchmarks (2026-02-16)
 
-For each month folder:
-
-1. **List available files**:
-   ```powershell
-   $src = "C:\PROJECTS\supreme-court-scraper\MARKDOWN\markdown\{YEAR}\{MM}_{Mon}"
-   $files = (Get-ChildItem $src -File -Filter "*.md").FullName
-   $files.Count
-   ```
-
-2. **Check how many are already done** (resume support):
-   ```powershell
-   $dst = "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\{YEAR}\{MM}_{Mon}"
-   $done = if (Test-Path $dst) { (Get-ChildItem $dst -File -Filter "*-case-digest.md").Count } else { 0 }
-   Write-Output "Done: $done / $($files.Count)"
-   ```
-
-3. **Run the pipeline**:
-   ```
-   notebooklm.notebook_digest_multi
-     notebook_ids: ["{ID1}", "{ID2}", "{ID3}"]
-     file_paths: [... all .md files in this month ...]
-     output_dir: "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\{YEAR}\{MM}_{Mon}"
-     batch_size: 3
-   ```
-
-4. **Verify output count matches input count**.
-
-5. **Move to next month**.
+| Architecture | Notebooks | Files | Wall Time | Per Doc | Success Rate |
+|-------------|-----------|-------|-----------|---------|-------------|
+| Batch (v1, batch_size=3) | 3 | 9 | 55s | ~6s | **70-90%** (split errors) |
+| **1:1 (v3, batch_size=1)** | **10** | **10** | **57s** | **~5.7s** | **100%** |
 
 ---
 
 ## Pipeline Tool Reference
 
-### `notebook_digest_multi` (RECOMMENDED — fastest)
-
-Distributes files across multiple notebooks. Each notebook processes its share concurrently.
+### `notebook_digest_multi` (RECOMMENDED)
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `notebook_ids` | `list[str]` | required | List of notebook UUIDs (use 5 for optimal throughput) |
+| `notebook_ids` | `list[str]` | required | List of notebook UUIDs (use 10) |
 | `file_paths` | `list[str]` | required | Absolute paths to source `.md` files |
 | `output_dir` | `str` | required | Where to save digest files |
-| `query_template` | `str` | Madera format | Case digest prompt template |
-| `batch_size` | `int` | 3 | Cases queried per API call |
-| `max_retries` | `int` | 2 | Retry attempts per batch |
-| `delay` | `float` | 1.0 | Seconds between thread starts |
-
-**Performance**: ~3.6s per doc with 5 notebooks (~6s with 3).
+| `query_template` | `str` | Madera format | Case digest prompt (includes SHORT_TITLE instruction) |
+| `batch_size` | `int` | 1 | Not used (kept for API compat, always processes 1 at a time) |
+| `max_retries` | `int` | 3 | Retry attempts per query |
+| `delay` | `float` | 1.0 | Seconds between staggered notebook starts |
 
 **Key features**:
-- **LIFO source management**: Add → query → save → delete per batch. Notebooks never accumulate sources.
-- **No source limit**: Same 3 notebooks can process unlimited files (never exceeds `batch_size` sources).
-- **Resume on re-run**: Skips files whose digest already exists (>100 bytes). Safe to re-run after timeout.
-- **Per-batch retry**: Failed queries retry up to `max_retries` times.
-- **Incremental saves**: Each digest is saved immediately — partial results survive timeouts.
-
-### `notebook_digest_pipeline` (single notebook fallback)
-
-Same as above but uses only 1 notebook. Use if multi-notebook is unavailable.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `notebook_id` | `str` | required | Single notebook UUID |
-| `file_paths` | `list[str]` | required | Absolute paths |
-| `output_dir` | `str` | required | Output directory |
-| `batch_size` | `int` | 3 | Cases per query |
-| `parallel` | `int` | 2 | Concurrent query threads |
-
-**Performance**: ~15s per doc with 1 notebook.
+- **1:1 processing**: One case per notebook per cycle (no batching/splitting)
+- **LIFO source management**: Add → query → save → delete per case
+- **Content-validated resume**: Skips only genuinely complete digests (checks structural markers)
+- **Response validation**: Only saves digests that pass quality checks
+- **Metadata preservation**: YAML frontmatter from source files carried to output
+- **Short title correction**: NotebookLM generates corrected `abridged_title`
+- **Per-query retry**: Up to 3 attempts with 2s backoff
 
 ---
 
-## Handling Large Months (50+ files)
+## Error Recovery
 
-**No special handling needed.** The pipeline uses LIFO source management — sources are deleted after each batch query. The same 3 notebooks can process any number of files without hitting the 50-source limit.
-
-Just pass all files in a single call:
-```
-notebooklm.notebook_digest_multi
-  notebook_ids: ["{ID1}", "{ID2}", "{ID3}", "{ID4}", "{ID5}"]   ← same 5 notebooks always
-  file_paths: [... all 130 files ...]
-  output_dir: "..."
-  batch_size: 3
-```
-
-The pipeline internally cycles per notebook: add 3 → query → save → delete 3 → add next 3 → ... (all 5 notebooks in parallel)
+| Scenario | What happens | Action |
+|----------|-------------|--------|
+| **Timeout** | Completed digests are saved; incomplete cases have no file | Re-run same command — resume skips valid files |
+| **Auth expired** | Returns "Cookies have expired" | Run `notebooklm-mcp-auth`, log in, retry |
+| **"No answer returned"** | Query retries 3 times; if all fail, marked `failed` | Re-run picks it up |
+| **Response fails validation** | No file written, marked `failed` | Re-run picks it up |
+| **Save error (disk)** | Exception caught, marked `failed` | Fix disk issue, re-run |
+| **Power failure / crash** | Valid saves persist; incomplete cases have no file | Re-run picks up exactly where it left off |
+| **Notebook source limit** | N/A — LIFO keeps 0-1 sources per notebook | Same notebooks work indefinitely |
 
 ---
 
 ## Execution Checklist
-
-Use this checklist to track progress year-by-year:
 
 ```
 [ ] 1996 (778 files, 12 months)
@@ -271,72 +332,47 @@ Use this checklist to track progress year-by-year:
 
 ---
 
-## Example: Processing January 2013
+## Developer Notes
 
+### Installing Code Changes
+After editing `server.py`, you **must** use this exact command:
+```powershell
+Stop-Process -Name "notebooklm-mcp" -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+uv tool install "C:\PROJECTS\notebooklm-mcp" --force --reinstall
 ```
-# Step 1: List source files
-$src = "C:\PROJECTS\supreme-court-scraper\MARKDOWN\markdown\2013\01_Jan"
-$files = (Get-ChildItem $src -File -Filter "*.md").FullName
-# Result: 87 files
 
-# Step 2: Use the same 5 worker notebooks (created once, reused forever)
+> ⚠️ **`--reinstall` is mandatory.** Without it, `uv tool install --force` uses cached build artifacts and does NOT pick up code changes from the local path.
 
-# Step 3: Process ALL 87 files in one call (LIFO handles source cleanup)
-notebooklm.notebook_digest_multi
-  notebook_ids: ["9daa06dc-...", "d30bc801-...", "942b25a4-...", "f849b21c-...", "5ee19729-..."]
-  file_paths: [all 87 file paths]
-  output_dir: "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\2013\01_Jan"
-  batch_size: 3
-
-# Internally: each notebook processes ~18 files
-#   add 3 → query → save 3 → delete 3 → add next 3 → ... (6 cycles each)
-#   Total: ~6 batch queries × 20s / 5 notebooks = ~24s
-
-# Step 4: Verify
-$done = (Get-ChildItem "C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS\2013\01_Jan" -File).Count
-# Expected: 87
+### Scaling to 15 Notebooks
+To increase parallelism, create 5 more notebooks:
 ```
+notebooklm.notebook_create → title: "Notebook11" through "Notebook15"
+```
+Then add their IDs to the `notebook_ids` list. The pipeline auto-distributes files across all provided notebooks.
 
 ---
 
-## Error Recovery
+## Changelog
 
-| Scenario | What happens | Action |
-|----------|-------------|--------|
-| **Timeout** | Pipeline saves partial results | Re-run same command — resume skips completed files |
-| **Auth expired** | Returns "Cookies have expired" | Run `notebooklm-mcp-auth`, log in, retry |
-| **Notebook source limit** | N/A — LIFO auto-cleanup keeps notebooks under limit | Same 3 notebooks work indefinitely |
-| **Split mismatch** | Batch response can't be split | Entry marked `partial` — re-run with `batch_size: 1` for those files |
-| **Network error** | Per-batch retry kicks in | Automatic — up to `max_retries` attempts |
+### v3.0 — 2026-02-16 (Current)
+- **1:1 architecture**: One case per notebook per cycle (eliminates split mismatch errors)
+- **10 parallel notebooks**: 2x more than v2
+- **Content-validated resume**: Checks CAPTION/FACTS/ISSUE/RULING markers, not just file size
+- **Response validation before save**: Prevents corrupt/truncated digests from being written
+- **LIFO cleanup in `finally` block**: Source always deleted, even on error
+- **Metadata preservation**: YAML frontmatter from source files preserved in output
+- **Short title correction**: NotebookLM generates corrected `abridged_title`
+- **max_retries bumped to 3**: Reduces transient API failure rate
+- **Removed regex splitting**: No `re` import needed; no parsing errors possible
 
----
+### v2.0 — 2026-02-16 (Deprecated)
+- Multi-notebook parallel processing
+- Batch size 3 (regex splitting — fragile)
+- LIFO source management
+- Resume based on file size >100 bytes
 
-## Output Format
-
-Each digest follows the **Atty. Madera** case digest format:
-
-```markdown
-I. CAPTION
-**PARTY A v. PARTY B**, G.R. No. XXXXX, Date, Phil. Citation, Ponente, J.
-
-II. FACTS
-[Concise recitation of material facts]
-
-III. ISSUE/S
-W/N [issue statement]
-
-IV. RULING
-**YES/NO.** [Holding with ratio decidendi]
-```
-
----
-
-## Performance Benchmarks
-
-| Method | Tool | Docs | Wall Time | Per Doc | Speedup |
-|--------|------|------|-----------|---------|---------|
-| Sequential | `notebook_digest_pipeline` (v2) | 6 | ~230s | ~38s | 1x |
-| Batch + Parallel | `notebook_digest_pipeline` (v3) | 6 | 92s | ~15s | 2.5x |
-| **Multi-Notebook** | **`notebook_digest_multi`** | **9** | **55s** | **~6s** | **6.3x** |
-
-*Benchmarked 2026-02-16 with 3 notebooks, batch_size=3.*
+### v1.0 — 2026-02-16 (Deprecated)
+- Single notebook processing
+- Sequential queries
+- No resume support

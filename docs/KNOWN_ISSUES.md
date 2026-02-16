@@ -134,6 +134,49 @@ If auto-extraction fails:
 
 ---
 
+## 6. Batch Pipeline — Resolved Issues (v3)
+
+The following issues were discovered and **resolved** in the v3 pipeline refactor on 2026-02-16:
+
+### 6a. Split Mismatch (RESOLVED)
+- **Cause**: Batching 3 cases per query required regex splitting of the combined response. NotebookLM's formatting varied, causing the regex to produce wrong splits (10-30% failure rate).
+- **Fix**: Switched to 1:1 architecture (one case per query). No splitting needed. 100% success rate.
+
+### 6b. Truncated/Corrupt Digests Saved (RESOLVED)
+- **Cause**: The save logic wrote partial responses to disk. The resume check (`>100 bytes`) then skipped these files, treating them as completed.
+- **Fix**: Response validation before save (≥2 structural markers + ≥300 chars). Content-validated resume checks CAPTION/FACTS/ISSUE/RULING markers instead of just file size.
+
+### 6c. Source Leak on Error (RESOLVED)
+- **Cause**: If an error occurred after adding a source but before deletion, the source remained in the notebook, slowly filling it up.
+- **Fix**: LIFO cleanup moved to `finally` block — source is always deleted regardless of error.
+
+### 6d. Output Directory Race Condition (RESOLVED)
+- **Cause**: Cleaning output directory while the pipeline was still writing caused `No such file or directory` errors.
+- **Fix**: `os.makedirs(output_dir, exist_ok=True)` ensures directory exists before each save attempt.
+
+---
+
+## 7. `uv tool install` Cache Trap
+
+### What it is
+`uv tool install --force` does **NOT** pick up code changes from a local path if the package version hasn't changed. It uses cached build artifacts.
+
+### Symptoms
+- Code changes in `server.py` are not reflected after `uv tool install --force`
+- The installed version at `C:\Users\Michael\AppData\Roaming\uv\tools\notebooklm-mcp-server\Lib\site-packages\notebooklm_mcp\server.py` still shows old code
+
+### How to fix
+**Always use `--reinstall`**:
+```powershell
+Stop-Process -Name "notebooklm-mcp" -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+uv tool install "C:\PROJECTS\notebooklm-mcp" --force --reinstall
+```
+
+The `--reinstall` flag forces uv to rebuild from source instead of using cached artifacts.
+
+---
+
 ## Reporting Issues
 
 When reporting issues, include:
@@ -141,4 +184,3 @@ When reporting issues, include:
 2. The error message (redact any sensitive info)
 3. Whether the operation worked before
 4. The current date (to correlate with potential Google deployments)
-
