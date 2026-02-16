@@ -2193,14 +2193,24 @@ def notebook_digest_pipeline(
     query_template: str = DEFAULT_DIGEST_QUERY,
     titles: list[str] | None = None,
     max_retries: int = 2,
+    batch_size: int = 3,
+    parallel: int = 2,
+    delay: float = 1.0,
 ) -> dict[str, Any]:
     """Full pipeline: reads files from disk → adds as sources → queries each → saves digests.
 
     This is the OPTIMAL tool for batch case digest generation. The agent only sees
     metadata — no document text or digest content passes through the context window.
 
+    Architecture (v3 — two-phase + batch + parallel):
+      Phase 1: Add all files as sources (sequential, ~2s each)
+      Phase 2: Query in multi-case batches using threaded parallelism
+
     Features:
-    - Per-document retry: if a query fails, retries up to max_retries times
+    - Multi-case batching: queries batch_size cases per API call (default: 3)
+    - Threaded parallelism: runs up to 'parallel' queries concurrently (default: 2)
+    - Human-like delay: staggers parallel requests by 'delay' seconds
+    - Per-document retry: retries failed queries up to max_retries times
     - Resume on re-run: skips files whose digest already exists in output_dir
     - Incremental saves: partial results are preserved even if pipeline times out
 
@@ -2210,10 +2220,15 @@ def notebook_digest_pipeline(
         output_dir: Directory to save digest .md files
         query_template: Query to use for each source (default: Madera case digest)
         titles: Optional list of titles (one per file). Defaults to filename.
-        max_retries: Max retry attempts per document for failed queries (default: 2)
+        max_retries: Max retry attempts per batch for failed queries (default: 2)
+        batch_size: Number of cases to query in a single API call (default: 3)
+        parallel: Max concurrent query threads (default: 2)
+        delay: Seconds between starting parallel threads (default: 1.0)
     """
     import os
+    import re
     import time
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     if not file_paths:
         return {"status": "error", "error": "No file paths provided"}
@@ -2225,48 +2240,67 @@ def notebook_digest_pipeline(
     except Exception as e:
         return {"status": "error", "error": f"Auth failed: {e}"}
 
-    results = []
-    add_success = 0
-    query_success = 0
-    skipped = 0
-    total = len(file_paths)
-
+    # ── Compute titles and output paths ──────────────────────────
+    entries = []
     for i, path in enumerate(file_paths):
-        # Determine title
         if titles and i < len(titles):
             title = titles[i]
         else:
             title = os.path.splitext(os.path.basename(path))[0]
 
-        entry = {"index": i, "title": title, "path": path}
-
-        # Compute output path early for resume check
         safe_title = "".join(
             c if c.isalnum() or c in " .-_()," else "_"
             for c in title
-        ).strip()
-        if not safe_title:
-            safe_title = f"digest_{i}"
+        ).strip() or f"digest_{i}"
+
         output_path = os.path.join(output_dir, f"{safe_title}-case-digest.md")
+        entries.append({
+            "index": i,
+            "title": title,
+            "path": path,
+            "output_path": output_path,
+            "safe_title": safe_title,
+        })
 
-        # Resume: skip if digest already exists on disk
-        if os.path.exists(output_path):
-            existing_size = os.path.getsize(output_path)
-            if existing_size > 100:  # Non-trivial file
-                entry["status"] = "skipped"
-                entry["output_path"] = output_path
-                entry["output_size"] = existing_size
-                entry["reason"] = "Digest already exists"
+    # ── Phase 0: Resume — skip already-completed digests ─────────
+    results = []
+    to_add = []
+    skipped = 0
+
+    for entry in entries:
+        if os.path.exists(entry["output_path"]):
+            existing_size = os.path.getsize(entry["output_path"])
+            if existing_size > 100:
+                results.append({
+                    **entry,
+                    "status": "skipped",
+                    "output_size": existing_size,
+                    "reason": "Digest already exists",
+                })
                 skipped += 1
-                query_success += 1  # Count as success for summary
-                results.append(entry)
                 continue
+        to_add.append(entry)
 
-        # Step 1: Read and add the file
+    if not to_add:
+        return {
+            "status": "success",
+            "summary": {
+                "total": len(entries),
+                "sources_added": 0,
+                "digests_saved": skipped,
+                "skipped": skipped,
+                "failed": 0,
+            },
+            "results": results,
+        }
+
+    # ── Phase 1: Add all files as sources (sequential) ───────────
+    source_entries = []  # Entries that were successfully added
+
+    for entry in to_add:
+        path = entry["path"]
         if not os.path.exists(path):
-            entry["status"] = "failed"
-            entry["error"] = f"File not found: {path}"
-            results.append(entry)
+            results.append({**entry, "status": "failed", "error": f"File not found: {path}"})
             continue
 
         try:
@@ -2278,79 +2312,192 @@ def notebook_digest_pipeline(
                     text = f.read()
 
             if not text.strip():
-                entry["status"] = "skipped"
-                entry["error"] = "File is empty"
-                results.append(entry)
+                results.append({**entry, "status": "skipped", "error": "File is empty"})
                 continue
 
-            add_result = client.add_text_source(notebook_id, text=text, title=title)
+            add_result = client.add_text_source(notebook_id, text=text, title=entry["title"])
             if not add_result:
-                entry["status"] = "failed"
-                entry["error"] = "Failed to add source"
-                results.append(entry)
+                results.append({**entry, "status": "failed", "error": "Failed to add source"})
                 continue
 
-            source_id = add_result.get("id")
-            entry["source_id"] = source_id
+            entry["source_id"] = add_result.get("id")
             entry["input_size"] = len(text.encode("utf-8"))
-            add_success += 1
+            source_entries.append(entry)
 
         except Exception as e:
-            entry["status"] = "failed"
-            entry["error"] = f"Add source failed: {e}"
-            results.append(entry)
-            continue
+            results.append({**entry, "status": "failed", "error": f"Add source failed: {e}"})
 
-        # Step 2: Query for digest (with retry)
+    if not source_entries:
+        add_count = 0
+        return {
+            "status": "partial",
+            "summary": {
+                "total": len(entries), "sources_added": 0,
+                "digests_saved": skipped, "skipped": skipped,
+                "failed": len(to_add),
+            },
+            "results": results,
+        }
+
+    # ── Phase 2: Query in batches with parallelism ───────────────
+
+    def _build_batch_query(batch_entries, template):
+        """Build a multi-case query for a batch of sources."""
+        if len(batch_entries) == 1:
+            return template  # Single case — use template as-is
+        # Multi-case: list the case titles so NotebookLM digests each
+        case_list = "\n".join(
+            f"- {e['title']}" for e in batch_entries
+        )
+        return (
+            f"Write separate case digests for each of the following cases. "
+            f"Use a clear separator (a line of dashes: ---) between each digest.\n\n"
+            f"Cases:\n{case_list}\n\n"
+            f"For EACH case, follow this format:\n{template}"
+        )
+
+    def _split_multi_digest(text, expected_count):
+        """Split a multi-case response into individual digests."""
+        if expected_count == 1:
+            return [text]
+
+        # Split on separator lines (----, ===, or "Case Digest:" headers)
+        parts = re.split(
+            r'\n-{3,}\n|\n={3,}\n|\n\*{3,}\n',
+            text
+        )
+        # Filter out empty/trivial parts
+        parts = [p.strip() for p in parts if p.strip() and len(p.strip()) > 100]
+
+        if len(parts) == expected_count:
+            return parts
+
+        # Fallback: try splitting on "I. CAPTION" or "Case Digest:" headers
+        header_parts = re.split(
+            r'(?=\*{0,2}I\.\s*CAPTION\*{0,2})|(?=Case Digest:)',
+            text,
+            flags=re.IGNORECASE
+        )
+        header_parts = [p.strip() for p in header_parts if p.strip() and len(p.strip()) > 100]
+
+        if len(header_parts) == expected_count:
+            return header_parts
+
+        # Last resort: if we got fewer parts, return what we have
+        return parts if parts else [text]
+
+    def _query_batch(batch_entries, batch_idx):
+        """Query a batch of cases and save each digest to disk."""
+        batch_results = []
+        source_ids = [e["source_id"] for e in batch_entries]
+        query_text = _build_batch_query(batch_entries, query_template)
+
         last_error = None
+        answer = None
+
         for attempt in range(1, max_retries + 1):
             try:
                 query_result = client.query(
                     notebook_id,
-                    query_text=query_template,
-                    source_ids=[source_id],
+                    query_text=query_text,
+                    source_ids=source_ids,
                 )
-
-                if not query_result or not query_result.get("answer"):
+                if query_result and query_result.get("answer"):
+                    answer = query_result["answer"]
+                    last_error = None
+                    break
+                else:
                     last_error = "Query returned no answer"
                     if attempt < max_retries:
-                        time.sleep(2)  # Brief pause before retry
-                    continue
-
-                answer = query_result["answer"]
-
-                # Step 3: Save to disk
-                with open(output_path, "w", encoding="utf-8") as f:
-                    f.write(answer)
-
-                entry["status"] = "success"
-                entry["output_path"] = output_path
-                entry["output_size"] = len(answer.encode("utf-8"))
-                entry["attempts"] = attempt
-                query_success += 1
-                last_error = None
-                break  # Success — exit retry loop
-
+                        time.sleep(2)
             except Exception as e:
                 last_error = str(e)
                 if attempt < max_retries:
                     time.sleep(2)
 
-        if last_error:
-            entry["status"] = "partial"
-            entry["error"] = f"Query failed after {max_retries} attempts: {last_error}"
-            entry["attempts"] = max_retries
+        if last_error or not answer:
+            # All retries failed for this batch
+            for entry in batch_entries:
+                batch_results.append({
+                    **entry,
+                    "status": "partial",
+                    "error": f"Query failed after {max_retries} attempts: {last_error}",
+                    "attempts": max_retries,
+                })
+            return batch_results
 
-        results.append(entry)
+        # Split multi-case response into individual digests
+        digests = _split_multi_digest(answer, len(batch_entries))
 
+        for j, entry in enumerate(batch_entries):
+            if j < len(digests):
+                digest_text = digests[j]
+                try:
+                    with open(entry["output_path"], "w", encoding="utf-8") as f:
+                        f.write(digest_text)
+                    batch_results.append({
+                        **entry,
+                        "status": "success",
+                        "output_size": len(digest_text.encode("utf-8")),
+                        "attempts": 1,
+                        "batch_index": batch_idx,
+                    })
+                except Exception as e:
+                    batch_results.append({
+                        **entry,
+                        "status": "partial",
+                        "error": f"Save failed: {e}",
+                    })
+            else:
+                # Fewer digests than expected — save entire response for this entry
+                batch_results.append({
+                    **entry,
+                    "status": "partial",
+                    "error": f"Could not split batch response (got {len(digests)} digests for {len(batch_entries)} cases)",
+                    "batch_index": batch_idx,
+                })
+
+        return batch_results
+
+    # Create batches
+    batches = []
+    for b in range(0, len(source_entries), batch_size):
+        batches.append(source_entries[b:b + batch_size])
+
+    # Execute batches in parallel threads with staggered delay
+    query_success = skipped  # Start with skipped count
+    all_batch_results = []
+
+    with ThreadPoolExecutor(max_workers=parallel) as executor:
+        futures = {}
+        for batch_idx, batch in enumerate(batches):
+            if batch_idx > 0:
+                time.sleep(delay)  # Human-like stagger
+            future = executor.submit(_query_batch, batch, batch_idx)
+            futures[future] = batch_idx
+
+        for future in as_completed(futures):
+            batch_results = future.result()
+            all_batch_results.extend(batch_results)
+
+    # Merge and count
+    for br in all_batch_results:
+        results.append(br)
+        if br.get("status") == "success":
+            query_success += 1
+
+    total = len(entries)
     return {
         "status": "success" if query_success == total else "partial",
         "summary": {
             "total": total,
-            "sources_added": add_success,
+            "sources_added": len(source_entries),
             "digests_saved": query_success,
             "skipped": skipped,
             "failed": total - query_success,
+            "batches": len(batches),
+            "batch_size": batch_size,
+            "parallel_threads": parallel,
         },
         "results": results,
     }
