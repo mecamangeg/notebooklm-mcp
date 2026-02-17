@@ -119,3 +119,26 @@ check_auth_status → notebook_add_local_files → notebook_query_batch → save
 
 See `.agent/workflows/notebooklm-digest.md` for the full optimized workflow.
 
+## SFT Accounting Dataset Runner
+
+`sft-accounting-runner.py` generates a supervised fine-tuning dataset by querying NotebookLM with 155 multi-part IFRS/IAS accounting questions.
+
+### Key Details
+- **Notebook**: `f6418509-d4a1-4e67-bf8e-294eb7b7d937` (150+ IFRS/IAS PDFs)
+- **Questions**: 155 scenario-based questions across 4 markdown files in `C:\PROJECTS\robsky-ai-vertex\SUPERVISED FINE TUNING\`
+- **Output**: Raw answers saved to `ACCOUNTING_RAW_ANSWERS\Q001.md` - `Q155.md`
+- **SFT JSONL**: `--post-process-only` converts raw answers to Vertex AI SFT format
+
+### Critical: httpx Timeout
+The httpx timeout in `api_client.py` `_get_client()` **MUST be ≥ 120s** for notebooks with 150+ sources. Default 30s causes ReadTimeout errors.
+
+### Parallel Workers (4x throughput)
+Run 4 processes with non-overlapping `--start-at`/`--end-at` ranges. Each uses the same cached cookies independently. See `.agent/workflows/sft-parallel-workers.md` for the full procedure.
+
+```bash
+# Example: 4 parallel workers
+uv run python sft-accounting-runner.py --notebook-id <ID> --start-at 1 --end-at 40 --delay 5 &
+uv run python sft-accounting-runner.py --notebook-id <ID> --start-at 41 --end-at 80 --delay 5 &
+uv run python sft-accounting-runner.py --notebook-id <ID> --start-at 81 --end-at 120 --delay 5 &
+uv run python sft-accounting-runner.py --notebook-id <ID> --start-at 121 --end-at 155 --delay 5 &
+```

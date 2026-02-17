@@ -338,7 +338,7 @@ class NotebookLMClient:
                     "X-Same-Domain": "1",
                     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
                 },
-                timeout=30.0,
+                timeout=120.0,
             )
         return self._client
 
