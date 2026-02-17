@@ -338,10 +338,25 @@ def parse_all_questions() -> list[ParsedQuestion]:
     return all_questions
 
 
-# ── Cookie Refresh ────────────────────────────────────────────────
+# ── Cookie Refresh via Chrome DevTools Protocol ──────────────────
+#
+# Strategy (mirrors notebooklm-mcp-runner.py):
+#   1. Launch Chrome with --remote-debugging-port=9222 automatically
+#   2. Navigate to notebooklm.google.com (keeps Google session alive)
+#   3. Every REFRESH_INTERVAL_SECONDS, reach into Chrome via CDP and
+#      extract fresh cookies — Google refreshes PSIDTS automatically
+#   4. Fallback: disk-based reload (for externally-saved cookies via MCP)
+#
+# This eliminates the need to manually paste cookies every ~20 minutes.
 
 # Track auth.json modification time for auto-reload
 _auth_file_mtime: float = 0.0
+_last_refresh_time: float = 0.0
+_chrome_launched: bool = False
+
+# Auto-refresh settings (same as notebooklm-mcp-runner.py)
+REFRESH_INTERVAL_SECONDS = 600  # Re-extract cookies every 10 minutes
+REFRESH_INTERVAL_QUERIES = 20   # Or every 20 queries, whichever comes first
 
 
 def _get_auth_file_path() -> str:
@@ -349,35 +364,94 @@ def _get_auth_file_path() -> str:
     return str(Path.home() / ".notebooklm-mcp" / "auth.json")
 
 
+def ensure_chrome_cdp() -> bool:
+    """Ensure Chrome is running with CDP on port 9222 and NotebookLM is loaded.
+
+    This is the KEY function that prevents cookie expiration. Chrome keeps
+    the Google session alive automatically — we just need to reach in and
+    grab the cookies periodically.
+
+    Returns True if Chrome+CDP is ready.
+    """
+    global _chrome_launched
+
+    from notebooklm_mcp.auth_cli import (
+        CDP_DEFAULT_PORT,
+        get_chrome_debugger_url,
+        get_chrome_pages,
+        launch_chrome,
+        find_or_create_notebooklm_page,
+    )
+
+    # Check if Chrome is already running with CDP
+    debugger_url = get_chrome_debugger_url(CDP_DEFAULT_PORT)
+
+    if not debugger_url:
+        if _chrome_launched:
+            # We launched it before but it's gone — don't re-launch automatically
+            print("  [cdp] ⚠️ Chrome was closed — CDP unavailable", file=sys.stderr)
+            return False
+
+        # Launch Chrome with our dedicated profile
+        print("  [cdp] 🚀 Launching Chrome with remote debugging (port 9222)...")
+        success = launch_chrome(CDP_DEFAULT_PORT, headless=False)
+        if not success:
+            print("  [cdp] ❌ Failed to launch Chrome", file=sys.stderr)
+            return False
+
+        _chrome_launched = True
+        time.sleep(3)
+
+        debugger_url = get_chrome_debugger_url(CDP_DEFAULT_PORT)
+        if not debugger_url:
+            print("  [cdp] ❌ Chrome launched but CDP not responding", file=sys.stderr)
+            return False
+
+    # Ensure NotebookLM page exists
+    pages = get_chrome_pages(CDP_DEFAULT_PORT)
+    nb_page = next((p for p in pages if "notebooklm.google.com" in p.get("url", "")), None)
+
+    if not nb_page:
+        print("  [cdp] 📄 Opening NotebookLM page...")
+        nb_page = find_or_create_notebooklm_page(CDP_DEFAULT_PORT)
+        if not nb_page:
+            print("  [cdp] ❌ Failed to open NotebookLM page", file=sys.stderr)
+            return False
+        time.sleep(3)  # Wait for page to load
+
+    print(f"  [cdp] ✅ Chrome ready (page: {nb_page.get('title', 'NotebookLM')})")
+    return True
+
+
 def reload_cookies_from_disk(force: bool = False) -> bool:
     """Re-read cookies from auth.json and reset the client singleton.
-    
-    This is the PRIMARY refresh mechanism. When fresh cookies are saved
-    via MCP's save_auth_tokens tool, this function picks them up.
-    
+
+    Secondary refresh mechanism — picks up cookies saved externally
+    (e.g., via MCP save_auth_tokens).
+
     Args:
         force: If True, always reload. If False, only reload if file changed.
-    
+
     Returns True if cookies were successfully reloaded.
     """
     global _auth_file_mtime
-    
+
     try:
         auth_path = _get_auth_file_path()
         if not os.path.exists(auth_path):
             logger.warning("[disk-reload] auth.json not found")
             return False
-        
+
         current_mtime = os.path.getmtime(auth_path)
-        
+
         if not force and current_mtime == _auth_file_mtime:
             return False  # File hasn't changed
-        
+
         # File changed — reload
         from notebooklm_mcp.server import reset_client
         reset_client()
         _auth_file_mtime = current_mtime
-        
+
         print(f"  [disk-reload] ✅ Cookies reloaded from auth.json", file=sys.stderr)
         logger.info(f"[disk-reload] Reloaded cookies (mtime={current_mtime})")
         return True
@@ -389,16 +463,23 @@ def reload_cookies_from_disk(force: bool = False) -> bool:
 
 def check_and_reload_cookies() -> bool:
     """Check if auth.json has been updated and reload if so.
-    
+
     Called before each query to auto-detect when fresh cookies
     are saved externally (e.g., via MCP save_auth_tokens).
     """
     return reload_cookies_from_disk(force=False)
 
 
-def silent_refresh_cookies():
-    """Try CDP first, fall back to disk reload."""
-    # Try CDP (works if Chrome is open with debugging port)
+def silent_refresh_cookies() -> bool:
+    """Extract fresh cookies from Chrome via CDP.
+
+    This is the PRIMARY refresh mechanism. Chrome keeps the Google
+    session alive, so cookies extracted via CDP are always fresh.
+
+    Falls back to disk reload if CDP is unavailable.
+    """
+    global _last_refresh_time
+
     try:
         from notebooklm_mcp.auth_cli import (
             get_chrome_pages, get_page_cookies, get_page_html, CDP_DEFAULT_PORT,
@@ -409,28 +490,87 @@ def silent_refresh_cookies():
 
         pages = get_chrome_pages(CDP_DEFAULT_PORT)
         nb_page = next((p for p in pages if "notebooklm.google.com" in p.get("url", "")), None)
-        if nb_page:
-            ws_url = nb_page.get("webSocketDebuggerUrl")
-            if ws_url:
-                cookies_list = get_page_cookies(ws_url)
-                cookies = {c["name"]: c["value"] for c in cookies_list}
-                if validate_cookies(cookies):
-                    html = get_page_html(ws_url)
-                    csrf_token = extract_csrf_from_page_source(html) or ""
-                    from notebooklm_mcp.auth_cli import extract_session_id_from_html
-                    session_id = extract_session_id_from_html(html)
-                    tokens = AuthTokens(cookies=cookies, csrf_token=csrf_token,
-                                        session_id=session_id, extracted_at=time.time())
-                    save_tokens_to_cache(tokens, silent=True)
-                    from notebooklm_mcp import server
-                    server.reset_client()
-                    print(f"  [auto-refresh] ✅ Cookies refreshed via CDP ({len(cookies)} cookies)")
-                    return True
-    except Exception:
-        pass  # CDP not available, fall through to disk reload
-    
-    # Fall back to disk reload (picks up cookies saved via MCP)
-    return reload_cookies_from_disk(force=True)
+
+        if not nb_page:
+            # Try to launch/reconnect Chrome
+            if ensure_chrome_cdp():
+                pages = get_chrome_pages(CDP_DEFAULT_PORT)
+                nb_page = next((p for p in pages if "notebooklm.google.com" in p.get("url", "")), None)
+
+        if not nb_page:
+            print("  [auto-refresh] No NotebookLM page found in Chrome", file=sys.stderr)
+            return reload_cookies_from_disk(force=True)
+
+        ws_url = nb_page.get("webSocketDebuggerUrl")
+        if not ws_url:
+            print("  [auto-refresh] No WebSocket URL for page", file=sys.stderr)
+            return reload_cookies_from_disk(force=True)
+
+        # Extract cookies from Chrome's live session
+        cookies_list = get_page_cookies(ws_url)
+        cookies = {c["name"]: c["value"] for c in cookies_list}
+
+        if not validate_cookies(cookies):
+            print("  [auto-refresh] Missing required cookies", file=sys.stderr)
+            return reload_cookies_from_disk(force=True)
+
+        # Extract CSRF token from page HTML
+        html = get_page_html(ws_url)
+        csrf_token = extract_csrf_from_page_source(html) or ""
+
+        # Extract session ID
+        from notebooklm_mcp.auth_cli import extract_session_id_from_html
+        session_id = extract_session_id_from_html(html)
+
+        # Save fresh tokens to cache
+        tokens = AuthTokens(
+            cookies=cookies,
+            csrf_token=csrf_token,
+            session_id=session_id,
+            extracted_at=time.time(),
+        )
+        save_tokens_to_cache(tokens, silent=True)
+
+        # Force the server module to reload its client
+        from notebooklm_mcp import server
+        server.reset_client()
+
+        _last_refresh_time = time.time()
+        print(f"  [auto-refresh] ✅ Cookies refreshed via CDP "
+              f"({len(cookies)} cookies, CSRF={'yes' if csrf_token else 'no'})")
+        return True
+
+    except Exception as e:
+        logger.error("[auto-refresh] Cookie refresh failed", exc_info=True)
+        print(f"  [auto-refresh] ⚠️ CDP failed: {e}", file=sys.stderr)
+        # Fall back to disk reload
+        return reload_cookies_from_disk(force=True)
+
+
+def should_refresh(queries_since_refresh: int) -> bool:
+    """Check if it's time for a proactive cookie refresh."""
+    if queries_since_refresh >= REFRESH_INTERVAL_QUERIES:
+        return True
+    if _last_refresh_time > 0 and (time.time() - _last_refresh_time) > REFRESH_INTERVAL_SECONDS:
+        return True
+    return False
+
+
+def _auth_recovery_callback() -> bool:
+    """Auth recovery callback registered with the server module.
+
+    This is invoked BY pipeline threads when they detect auth expiration.
+    It refreshes cookies from Chrome CDP and resets the server's client.
+    Thread-safe coordination is handled by the server module — only one
+    thread at a time will invoke this callback.
+    """
+    print("\n  🔑 [mid-flight auth recovery] Thread detected expired auth, refreshing...", file=sys.stderr)
+    success = silent_refresh_cookies()
+    if success:
+        print("  🔑 [mid-flight auth recovery] ✅ Done — resuming with fresh auth", file=sys.stderr)
+    else:
+        print("  🔑 [mid-flight auth recovery] ❌ Could not refresh cookies", file=sys.stderr)
+    return success
 
 
 # ── Query Execution ───────────────────────────────────────────────
@@ -459,8 +599,8 @@ def query_notebooklm(notebook_id: str, question: ParsedQuestion, output_path: st
                     logger.info(f"Q{question.number}: Backing off {backoff}s before retry")
                     print(f"Q{question.number}: Backing off {backoff}s before retry", file=sys.stderr)
                     time.sleep(backoff)
-                    # Force reload from disk (in case cookies were saved via MCP)
-                    reload_cookies_from_disk(force=True)
+                    # Try CDP refresh first, fall back to disk
+                    silent_refresh_cookies()
                     continue
                 return {"status": "error", "error": "Empty answer", "q_number": question.number}
 
@@ -496,12 +636,9 @@ def query_notebooklm(notebook_id: str, question: ParsedQuestion, output_path: st
                         exc_info=True)
             if attempt < MAX_RETRIES:
                 if "expired" in str(e).lower() or "auth" in str(e).lower():
-                    # Auth error — wait and reload from disk
-                    # This gives time for user to paste fresh cookies via MCP
-                    wait_secs = BACKOFF_BASE * (2 ** (attempt - 1))
-                    print(f"  🔑 Auth error on Q{question.number} — waiting {wait_secs}s for fresh cookies...", file=sys.stderr)
-                    time.sleep(wait_secs)
-                    reload_cookies_from_disk(force=True)
+                    # Auth error — try CDP refresh immediately
+                    print(f"  🔑 Auth error on Q{question.number} — refreshing via CDP...", file=sys.stderr)
+                    silent_refresh_cookies()
                 else:
                     time.sleep(QUERY_DELAY_SECONDS * 2)
             else:
@@ -738,20 +875,30 @@ def main():
 
     notebook_id = args.notebook_id
 
-    # Initial cookie load — snapshot the auth.json mtime
-    global _auth_file_mtime
-    print("\n🍪 Loading cookies...")
-    auth_path = _get_auth_file_path()
-    if os.path.exists(auth_path):
-        _auth_file_mtime = os.path.getmtime(auth_path)
-        print(f"   ✅ Using cookies from {auth_path}")
-        print(f"   ℹ️  Auto-reload enabled: save fresh cookies via MCP and workers will pick them up")
-    else:
-        print("   ⚠️  No auth.json found — will fail on first query")
+    # ── Chrome CDP Setup (auto cookie refresh) ──
+    global _auth_file_mtime, _last_refresh_time
+    print("\n🍪 Setting up cookie auto-refresh via Chrome CDP...")
+    print(f"   Auto-refresh: every {REFRESH_INTERVAL_QUERIES} queries or {REFRESH_INTERVAL_SECONDS}s")
 
-    # Register auth recovery callback (uses disk reload)
+    # Launch Chrome with CDP and do initial cookie extract
+    if ensure_chrome_cdp():
+        if silent_refresh_cookies():
+            print("   ✅ Fresh cookies loaded from Chrome")
+        else:
+            print("   ⚠️ Chrome running but cookie extract failed — using cached cookies")
+    else:
+        # Fallback: load from disk
+        auth_path = _get_auth_file_path()
+        if os.path.exists(auth_path):
+            _auth_file_mtime = os.path.getmtime(auth_path)
+            print(f"   ⚠️ Chrome CDP unavailable — using cached cookies from {auth_path}")
+            print(f"   ℹ️  You can paste fresh cookies via MCP and workers will auto-detect them")
+        else:
+            print("   ❌ No Chrome CDP and no cached cookies — queries will fail")
+
+    # Register auth recovery callback (CDP first, disk fallback)
     from notebooklm_mcp.server import set_auth_recovery_callback
-    set_auth_recovery_callback(lambda: reload_cookies_from_disk(force=True))
+    set_auth_recovery_callback(_auth_recovery_callback)
 
     # Load progress for resume support
     progress = load_progress()
@@ -790,7 +937,6 @@ def main():
     consecutive_failures = 0
     query_times = []
     refresh_counter = 0
-    REFRESH_EVERY = 20  # Refresh cookies every N queries
 
     for i, q in enumerate(target_questions):
         out_path = get_output_path(q.number)
@@ -800,14 +946,18 @@ def main():
             skipped += 1
             continue
 
-        # Check for fresh cookies from disk before each query
+        # ── Proactive cookie refresh (prevents expiration) ──
         refresh_counter += 1
+        # Check for externally-saved cookies (disk watch)
         if check_and_reload_cookies():
-            refresh_counter = 0  # Reset counter after disk reload
-        elif refresh_counter >= REFRESH_EVERY:
-            print(f"\n  ⏰ Proactive cookie re-read (every {REFRESH_EVERY} queries)...")
-            reload_cookies_from_disk(force=True)
             refresh_counter = 0
+        # Proactive CDP refresh (time-based or query-count-based)
+        elif should_refresh(refresh_counter):
+            print(f"\n  ⏰ Proactive cookie refresh via CDP "
+                  f"(after {refresh_counter} queries / "
+                  f"{int(time.time() - _last_refresh_time)}s since last)...")
+            if silent_refresh_cookies():
+                refresh_counter = 0
 
         # Progress display
         done_count = succeeded + failed + skipped
@@ -851,10 +1001,9 @@ def main():
                 cooldown = COOLDOWN_AFTER_FAILURES * (consecutive_failures // MAX_CONSECUTIVE_FAILURES)
                 cooldown = min(cooldown, 300)  # Cap at 5 minutes
                 print(f"         ⏳ {consecutive_failures} consecutive failures — cooling down {cooldown}s...")
-                print(f"         ℹ️  Save fresh cookies via MCP to resume automatically", file=sys.stderr)
                 time.sleep(cooldown)
-                # Reload from disk (picks up any freshly-saved cookies)
-                reload_cookies_from_disk(force=True)
+                # Try CDP refresh, fall back to disk
+                silent_refresh_cookies()
                 continue  # Skip the normal delay
 
         # Rate limiting delay
