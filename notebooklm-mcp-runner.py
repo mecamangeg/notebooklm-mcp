@@ -1,24 +1,62 @@
 """Process e-SCRA cases via the notebook_digest_multi pipeline.
 
-Usage: 
+Usage:
   python notebooklm-mcp-runner.py --volume Volume_001
   python notebooklm-mcp-runner.py --all  (Iterates through all Volumes numerically)
   python notebooklm-mcp-runner.py --all --start-at Volume_050  (Skip volumes before 050)
 
-Auto-refresh: Cookies are silently re-extracted from Chrome every
-REFRESH_INTERVAL_VOLUMES volumes (default: 5) to prevent auth expiration
-during long batch runs. Chrome must be open with NotebookLM loaded.
+Auth resilience (v2):
+  - Thread-safe auth recovery: when any notebook thread detects expired auth,
+    ONE thread refreshes cookies via Chrome CDP while others wait, then all
+    resume with fresh credentials.
+  - Per-volume retry: volumes with >50% failure get automatically retried
+    up to --max-retries times with a cookie refresh between each attempt.
+  - Proactive refresh: cookies are refreshed every N volumes (default: 5)
+    or every M seconds (default: 600) to prevent expiration in the first place.
+  - Chrome must be open with NotebookLM loaded for CDP cookie extraction.
 """
 import json
+import logging
 import os
 import sys
 import time
 import argparse
 import re
 import traceback
+from pathlib import Path
 
 # Add source to path so we can import directly
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+
+# ── Logging Setup ─────────────────────────────────────────────────
+# Console: INFO level (clean progress output)
+# File: DEBUG level (full tracebacks for post-mortem analysis)
+LOG_DIR = Path.home() / ".notebooklm-mcp"
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / "runner.log"
+
+logger = logging.getLogger("notebooklm_runner")
+logger.setLevel(logging.DEBUG)
+
+# File handler — DEBUG level, append mode, with tracebacks
+_fh = logging.FileHandler(LOG_FILE, encoding="utf-8")
+_fh.setLevel(logging.DEBUG)
+_fh.setFormatter(logging.Formatter(
+    "%(asctime)s [%(levelname)-7s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+))
+logger.addHandler(_fh)
+
+# Console handler — INFO level, compact format
+_ch = logging.StreamHandler(sys.stderr)
+_ch.setLevel(logging.INFO)
+_ch.setFormatter(logging.Formatter("%(message)s"))
+logger.addHandler(_ch)
+
+# Also configure the server logger to use our file handler
+logging.getLogger("notebooklm_mcp.server").setLevel(logging.DEBUG)
+logging.getLogger("notebooklm_mcp.server").addHandler(_fh)
+logging.getLogger("notebooklm_mcp.server").addHandler(_ch)
 
 # Force auth from cached tokens
 os.environ.setdefault("NOTEBOOKLM_BL", "boq_labs-tailwind-frontend_20260212.13_p0")
@@ -48,6 +86,7 @@ OUTPUT_ROOT = r"C:\PROJECTS\notebooklm-mcp\CASE-DIGESTS"
 # Auto-refresh settings
 REFRESH_INTERVAL_VOLUMES = 5   # Re-extract cookies every N volumes
 REFRESH_INTERVAL_SECONDS = 600 # Or every 10 minutes, whichever comes first
+MAX_VOLUME_RETRIES = 3         # Retry a failed volume up to N times
 
 # ── Cookie Auto-Refresh via Chrome DevTools Protocol ──────────────
 
@@ -122,25 +161,34 @@ def silent_refresh_cookies():
         save_tokens_to_cache(tokens, silent=True)
 
         # Force the server module to reload its client with fresh cookies
-        _reload_client()
+        from notebooklm_mcp import server
+        server.reset_client()
 
         _last_refresh_time = time.time()
         print(f"  [auto-refresh] ✅ Cookies refreshed ({len(cookies)} cookies, CSRF={'yes' if csrf_token else 'no'})")
         return True
 
     except Exception as e:
+        logger.error("[auto-refresh] Cookie refresh failed", exc_info=True)
         print(f"  [auto-refresh] ⚠️ Failed: {e}", file=sys.stderr)
         return False
 
 
-def _reload_client():
-    """Force the server module to create a new client with fresh cookies."""
-    try:
-        from notebooklm_mcp import server
-        # Reset the cached client so next call creates a fresh one
-        server._client = None
-    except Exception:
-        pass
+def _auth_recovery_callback():
+    """Auth recovery callback registered with the server module.
+
+    This is invoked BY pipeline threads when they detect auth expiration.
+    It refreshes cookies from Chrome CDP and resets the server's client.
+    Thread-safe coordination is handled by the server module — only one
+    thread at a time will invoke this callback.
+    """
+    print("\n  🔑 [mid-flight auth recovery] Thread detected expired auth, refreshing...", file=sys.stderr)
+    success = silent_refresh_cookies()
+    if success:
+        print("  🔑 [mid-flight auth recovery] ✅ Done — threads will resume with fresh auth", file=sys.stderr)
+    else:
+        print("  🔑 [mid-flight auth recovery] ❌ Could not refresh from Chrome", file=sys.stderr)
+    return success
 
 
 def should_refresh(volumes_since_refresh):
@@ -175,6 +223,7 @@ def _is_digest_valid(filepath):
                 markers += 1
         return markers >= 2
     except Exception:
+        logger.debug("_is_digest_valid failed for %s", filepath, exc_info=True)
         return False
 
 
@@ -202,8 +251,11 @@ def _count_valid_digests(out_dir, files):
 
 # ── Processing Logic ──────────────────────────────────────────────
 
-def process_directory(src_dir, out_dir, label):
-    """Process a single volume directory. Returns the result dict or None."""
+def process_directory(src_dir, out_dir, label, max_retries=MAX_VOLUME_RETRIES):
+    """Process a single volume directory with automatic retry on failure.
+
+    Returns the result dict or None.
+    """
     if not os.path.isdir(src_dir):
         print(f"ERROR: {src_dir} not found")
         return None
@@ -235,56 +287,73 @@ def process_directory(src_dir, out_dir, label):
     # Import here to avoid loading everything at startup
     from notebooklm_mcp.server import notebook_digest_multi
 
-    start = time.time()
-    result = notebook_digest_multi.fn(
-        notebook_ids=NOTEBOOK_IDS,
-        file_paths=files,
-        output_dir=out_dir,
-    )
-    elapsed = time.time() - start
+    # ── Retry loop: retry the volume if there are failures ──
+    best_result = None
 
-    summary = result.get("summary", {})
-    status = result.get("status")
-    failed = summary.get("failed", 0)
+    for attempt_num in range(1, max_retries + 1):
+        # Re-check completion before each attempt (digests accumulate on disk)
+        if attempt_num > 1:
+            valid_existing, total = _count_valid_digests(out_dir, files)
+            if valid_existing >= total:
+                print(f"  ✅ All {total} digests complete after retry!")
+                return {"status": "success", "summary": {"total": total, "skipped": total, "failed": 0}}
+            print(f"\n  🔄 Retry {attempt_num}/{max_retries} for {label} "
+                  f"({valid_existing}/{total} done, {total - valid_existing} remaining)")
 
-    print(f"\n  Result: {status}")
-    print(f"  Saved: {summary.get('digests_saved', '?')}/{summary.get('total', '?')}")
-    print(f"  Failed: {failed}")
-    print(f"  Elapsed: {elapsed:.1f}s ({summary.get('queries_per_minute', 0):.1f} q/min)")
+        start = time.time()
+        result = notebook_digest_multi.fn(
+            notebook_ids=NOTEBOOK_IDS,
+            file_paths=files,
+            output_dir=out_dir,
+        )
+        elapsed = time.time() - start
 
-    # Print progress log
-    logs = result.get("progress_log", [])
-    if len(logs) > 30:
-        print(f"    ... {len(logs)-30} logs hidden ...")
-        for line in logs[-30:]:
-            print(f"    {line}")
-    else:
-        for line in logs:
-            print(f"    {line}")
+        summary = result.get("summary", {})
+        status = result.get("status")
+        failed = summary.get("failed", 0)
+        saved = summary.get("digests_saved", 0)
 
-    # If ANY files failed, attempt auto-refresh and retry once.
-    # (Previously only triggered on total volume failure — now catches partial failures too)
-    if failed > 0:
-        new_successes = summary.get("digests_saved", 0) - summary.get("skipped", 0)
-        print(f"\n  ⚠️ {failed} file(s) failed (new successes: {new_successes}). Attempting auto-refresh + retry...")
-        if silent_refresh_cookies():
-            print(f"  🔄 Retrying {label} (only unfinished files will be re-attempted)...")
-            start2 = time.time()
-            result = notebook_digest_multi.fn(
-                notebook_ids=NOTEBOOK_IDS,
-                file_paths=files,
-                output_dir=out_dir,
-            )
-            elapsed2 = time.time() - start2
-            summary2 = result.get("summary", {})
-            print(f"\n  Retry result: {result.get('status')}")
-            print(f"  Saved: {summary2.get('digests_saved', '?')}/{summary2.get('total', '?')}")
-            print(f"  Failed: {summary2.get('failed', '?')}")
-            print(f"  Elapsed: {elapsed2:.1f}s")
+        attempt_label = f"Attempt {attempt_num}" if attempt_num > 1 else "Result"
+        print(f"\n  {attempt_label}: {status}")
+        print(f"  Saved: {saved}/{summary.get('total', '?')}")
+        print(f"  Failed: {failed}")
+        print(f"  Elapsed: {elapsed:.1f}s ({summary.get('queries_per_minute', 0):.1f} q/min)")
+
+        # Print progress log (last 30 lines)
+        logs = result.get("progress_log", [])
+        if len(logs) > 30:
+            print(f"    ... {len(logs)-30} logs hidden ...")
+            for line in logs[-30:]:
+                print(f"    {line}")
         else:
-            print(f"  Could not refresh cookies — retry skipped. Failures will persist.")
+            for line in logs:
+                print(f"    {line}")
 
-    return result
+        best_result = result
+
+        # ── Decide whether to retry ──
+        if failed == 0:
+            break  # All files succeeded or were skipped — done!
+
+        # Only retry if there were significant failures (>20% failure rate)
+        failure_rate = failed / max(summary.get("total", 1), 1)
+        if failure_rate < 0.05:
+            print(f"  ℹ️ Only {failed} failures ({failure_rate:.0%}) — accepting result.")
+            break
+
+        if attempt_num < max_retries:
+            # Proactive cookie refresh before retry
+            print(f"\n  ⚠️ {failed} file(s) failed ({failure_rate:.0%}). Refreshing cookies before retry...")
+            if silent_refresh_cookies():
+                print(f"  ✅ Cookies refreshed. Retrying in 3s...")
+                time.sleep(3)  # Brief cooldown before retry
+            else:
+                print(f"  ⚠️ Cookie refresh failed — retrying anyway (threads will attempt recovery)...")
+                time.sleep(2)
+        else:
+            print(f"\n  ⚠️ {failed} file(s) still failed after {max_retries} attempts.")
+
+    return best_result
 
 
 def get_volume_number(name):
@@ -316,9 +385,18 @@ def main():
                         help="Skip volumes before this one (e.g., --start-at Volume_050)")
     parser.add_argument("--refresh-every", type=int, default=REFRESH_INTERVAL_VOLUMES,
                         help=f"Auto-refresh cookies every N volumes (default: {REFRESH_INTERVAL_VOLUMES})")
-    
+    parser.add_argument("--max-retries", type=int, default=MAX_VOLUME_RETRIES,
+                        help=f"Max retry attempts per volume (default: {MAX_VOLUME_RETRIES})")
+
     args = parser.parse_args()
     refresh_interval = args.refresh_every
+    max_retries = args.max_retries
+
+    # ── Register auth-recovery callback with server module ──
+    # This lets pipeline threads trigger cookie refresh mid-flight
+    from notebooklm_mcp.server import set_auth_recovery_callback
+    set_auth_recovery_callback(_auth_recovery_callback)
+    print("✅ Auth recovery callback registered (threads can self-heal)")
 
     # Do an initial refresh to start with the freshest cookies
     print("Performing initial cookie refresh...")
@@ -332,7 +410,7 @@ def main():
     if args.all:
         # Get all folders named Volume_NNN
         volumes = [d for d in os.listdir(ESCRA_ROOT) if os.path.isdir(os.path.join(ESCRA_ROOT, d)) and d.startswith("Volume_")]
-        
+
         # Sort numerically instead of lexicographically
         volumes.sort(key=get_volume_number)
 
@@ -347,7 +425,8 @@ def main():
 
         total_volumes = len(volumes)
         print(f"Found {total_volumes} volumes to process.")
-        print(f"Auto-refresh: every {refresh_interval} volumes or {REFRESH_INTERVAL_SECONDS}s\n")
+        print(f"Auto-refresh: every {refresh_interval} volumes or {REFRESH_INTERVAL_SECONDS}s")
+        print(f"Max retries per volume: {max_retries}\n")
 
         # ── Cross-volume progress tracking ──
         volumes_since_refresh = 0
@@ -368,7 +447,7 @@ def main():
 
             src = os.path.join(ESCRA_ROOT, vol)
             dst = os.path.join(OUTPUT_ROOT, vol)
-            result = process_directory(src, dst, vol)
+            result = process_directory(src, dst, vol, max_retries=max_retries)
             volumes_since_refresh += 1
 
             # Accumulate stats
@@ -409,18 +488,21 @@ def main():
     elif args.volume:
         src = os.path.join(ESCRA_ROOT, args.volume)
         dst = os.path.join(OUTPUT_ROOT, args.volume)
-        process_directory(src, dst, args.volume)
+        process_directory(src, dst, args.volume, max_retries=max_retries)
     else:
         parser.print_help()
 
 
 if __name__ == "__main__":
+    logger.info("Runner started, log file: %s", LOG_FILE)
     try:
         main()
     except KeyboardInterrupt:
+        logger.info("Interrupted by user (Ctrl+C)")
         print("\n\nInterrupted! Progress saved to disk. Re-run to resume.")
         sys.exit(1)
     except Exception as e:
+        logger.critical("FATAL ERROR", exc_info=True)
         print(f"\nFATAL ERROR: {e}")
         traceback.print_exc()
         sys.exit(1)

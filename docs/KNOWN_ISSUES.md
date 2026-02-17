@@ -38,17 +38,34 @@ To find the current value:
 Authentication uses browser cookies extracted from an active Chrome session. These cookies have a limited lifespan.
 
 ### When it breaks
-Cookies typically expire after 2-4 weeks. Symptoms:
+Cookies typically expire after 2-4 weeks. CSRF tokens expire much faster (minutes to hours). Symptoms:
 - `ValueError: Cookies have expired. Please re-authenticate...`
 - API calls redirect to Google login page
+- HTTP 401/403 errors mid-run
 - Authentication errors on previously working operations
 
-### How to fix
-Re-extract fresh cookies using one of these methods:
+### Auto-Recovery (v2 — implemented in runner + server)
+
+The batch pipeline has **three layers of auth resilience**:
+
+1. **Proactive refresh** (runner level): Cookies are re-extracted from Chrome CDP every 5 volumes or 10 minutes, whichever comes first. Configurable via `--refresh-every`.
+
+2. **Per-volume retry** (runner level): If a volume has >5% failure rate, the runner automatically:
+   - Refreshes cookies from Chrome
+   - Retries the entire volume (only unfinished files)
+   - Up to `--max-retries` attempts (default: 3)
+
+3. **Mid-flight thread recovery** (server level): When any of the 15 notebook threads detects an auth error during `add_text_source` or `query`:
+   - Thread calls `_attempt_auth_recovery()` with leader election
+   - First thread to acquire the lock performs recovery via CDP callback
+   - Other threads block on the lock; when they enter, they see the updated generation counter and skip
+   - All threads then call `get_client()` which returns a fresh client from the new cached tokens
+   - The failed operation is retried with the new client
+
+### Manual fix (if auto-recovery fails)
+Re-extract fresh cookies manually:
 
 **Option A: notebooklm-mcp-auth CLI (recommended)**
-
-The built-in authentication CLI automatically launches Chrome, navigates to NotebookLM, and extracts cookies:
 
 ```bash
 notebooklm-mcp-auth

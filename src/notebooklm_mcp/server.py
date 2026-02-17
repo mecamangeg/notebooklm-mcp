@@ -1,12 +1,21 @@
 """NotebookLM MCP Server."""
 
+import json
+import logging
+import re
+import sys
+import threading
 from typing import Any
+
+logger = logging.getLogger("notebooklm_mcp.server")
 
 from fastmcp import FastMCP
 
 from .api_client import NotebookLMClient, extract_cookies_from_chrome_export, parse_timestamp
 
-# Initialize MCP server
+# ============================================================================
+# FastMCP Setup
+# ============================================================================
 mcp = FastMCP(
     name="notebooklm",
     instructions="""NotebookLM MCP - Access NotebookLM (notebooklm.google.com).
@@ -16,48 +25,149 @@ mcp = FastMCP(
 **Studio:** After creating audio/video/infographic/slides, poll studio_status for completion.""",
 )
 
-# Global state
+# ── Client Singleton (Thread-Safe) ──────────────────────────────────────
+
 _client: NotebookLMClient | None = None
+_client_lock = threading.Lock()
+
+# Auth-recovery callback — set by the runner so threads can trigger recovery
+# Signature: () -> bool  (returns True if recovery succeeded)
+_auth_recovery_callback = None
+_auth_recovery_lock = threading.Lock()
+_auth_recovery_generation = 0  # Incremented after each successful recovery
 
 
-def get_client() -> NotebookLMClient:
-    """Get or create the API client.
+def _create_client() -> NotebookLMClient:
+    """Create a new API client from available auth sources.
 
     Tries environment variables first, falls back to cached tokens from auth CLI.
     """
-    global _client
-    if _client is None:
-        import os
+    import os
+    from .auth import load_cached_tokens
 
-        from .auth import load_cached_tokens
+    cookie_header = os.environ.get("NOTEBOOKLM_COOKIES", "")
+    csrf_token = os.environ.get("NOTEBOOKLM_CSRF_TOKEN", "")
+    session_id = os.environ.get("NOTEBOOKLM_SESSION_ID", "")
 
-        cookie_header = os.environ.get("NOTEBOOKLM_COOKIES", "")
-        csrf_token = os.environ.get("NOTEBOOKLM_CSRF_TOKEN", "")
-        session_id = os.environ.get("NOTEBOOKLM_SESSION_ID", "")
-
-        if cookie_header:
-            # Use environment variables
-            cookies = extract_cookies_from_chrome_export(cookie_header)
+    if cookie_header:
+        cookies = extract_cookies_from_chrome_export(cookie_header)
+    else:
+        cached = load_cached_tokens()
+        if cached:
+            cookies = cached.cookies
+            csrf_token = csrf_token or cached.csrf_token
+            session_id = session_id or cached.session_id
         else:
-            # Try cached tokens from auth CLI
-            cached = load_cached_tokens()
-            if cached:
-                cookies = cached.cookies
-                csrf_token = csrf_token or cached.csrf_token
-                session_id = session_id or cached.session_id
-            else:
-                raise ValueError(
-                    "No authentication found. Either:\n"
-                    "1. Run 'notebooklm-mcp-auth' to authenticate via Chrome, or\n"
-                    "2. Set NOTEBOOKLM_COOKIES environment variable manually"
-                )
+            raise ValueError(
+                "No authentication found. Either:\n"
+                "1. Run 'notebooklm-mcp-auth' to authenticate via Chrome, or\n"
+                "2. Set NOTEBOOKLM_COOKIES environment variable manually"
+            )
 
-        _client = NotebookLMClient(
-            cookies=cookies,
-            csrf_token=csrf_token,
-            session_id=session_id,
-        )
-    return _client
+    return NotebookLMClient(
+        cookies=cookies,
+        csrf_token=csrf_token,
+        session_id=session_id,
+    )
+
+
+def get_client() -> NotebookLMClient:
+    """Get or create the API client (thread-safe)."""
+    global _client
+    with _client_lock:
+        if _client is None:
+            _client = _create_client()
+        return _client
+
+
+def reset_client():
+    """Reset the client singleton so next get_client() creates a fresh one.
+
+    Thread-safe. Called after auth recovery to force all threads to
+    pick up new credentials.
+    """
+    global _client
+    with _client_lock:
+        _client = None
+
+
+def set_auth_recovery_callback(callback):
+    """Register a callback the pipeline threads can invoke when auth fails.
+
+    The callback should: refresh cookies from Chrome CDP, save to cache,
+    then call reset_client(). Returns True on success.
+
+    This is designed to be set by the runner script — the server module
+    itself doesn't know how to refresh from Chrome.
+    """
+    global _auth_recovery_callback
+    _auth_recovery_callback = callback
+
+
+def _is_auth_error(error) -> bool:
+    """Detect if an error is caused by expired authentication.
+
+    Auth errors have specific signatures:
+    - ValueError with 'expired' or 're-authenticate'
+    - HTTP 401/403 status codes
+    - Redirect to accounts.google.com
+    """
+    err_str = str(error).lower()
+    auth_keywords = [
+        "cookies have expired",
+        "re-authenticate",
+        "401",
+        "403",
+        "accounts.google.com",
+        "could not extract csrf",
+        "login",
+    ]
+    return any(kw in err_str for kw in auth_keywords)
+
+
+def _attempt_auth_recovery(thread_label: str = "") -> bool:
+    """Thread-safe auth recovery using leader election.
+
+    Multiple threads may detect auth failure simultaneously. The first thread
+    to acquire the lock does the actual recovery. Subsequent threads that arrive
+    while recovery is in progress will block on the lock; when they enter, they
+    check if recovery already happened (via generation counter) and skip.
+
+    Returns True if recovery succeeded (either by this thread or another).
+    """
+    global _auth_recovery_callback, _auth_recovery_generation
+
+    if _auth_recovery_callback is None:
+        return False
+
+    # Snapshot the generation before acquiring the lock
+    gen_before = _auth_recovery_generation
+
+    with _auth_recovery_lock:
+        # If generation advanced while we waited, another thread already recovered
+        if _auth_recovery_generation > gen_before:
+            return True
+
+        # We are the leader — perform recovery
+        label = f"[{thread_label}] " if thread_label else ""
+        print(f"  {label}🔑 Auth expired — attempting recovery...",
+              file=sys.stderr, flush=True)
+
+        try:
+            success = _auth_recovery_callback()
+            if success:
+                _auth_recovery_generation += 1  # Signal to waiting threads
+                reset_client()  # Force all threads to get new client
+                print(f"  {label}✅ Auth recovery succeeded (gen={_auth_recovery_generation})",
+                      file=sys.stderr, flush=True)
+            else:
+                print(f"  {label}❌ Auth recovery callback returned False",
+                      file=sys.stderr, flush=True)
+            return success
+        except Exception as e:
+            print(f"  {label}❌ Auth recovery failed: {e}",
+                  file=sys.stderr, flush=True)
+            return False
 
 
 @mcp.tool()
@@ -2507,7 +2617,7 @@ def notebook_digest_pipeline(
                 try:
                     client.delete_source(sid)
                 except Exception:
-                    pass  # Best-effort cleanup
+                    logger.warning("LIFO cleanup: failed to delete source %s", sid, exc_info=True)
 
         return batch_results
 
@@ -2565,6 +2675,7 @@ def notebook_digest_multi(
     batch_size: int = 1,
     max_retries: int = 3,
     delay: float = 1.0,
+    post_add_delay: float = 3.0,
 ) -> dict[str, Any]:
     """Distribute files across MULTIPLE notebooks for maximum parallel throughput.
 
@@ -2593,6 +2704,10 @@ def notebook_digest_multi(
         batch_size: Not used (kept for API compat, always processes 1 at a time)
         max_retries: Retry attempts per query (default: 2)
         delay: Seconds between staggered starts (default: 1.0)
+        post_add_delay: Seconds to wait after add_text_source before querying (default: 3.0).
+            NotebookLM needs time to index a source before queries can use it.
+            With 14+ concurrent notebooks, the server-side processing queue
+            saturates quickly — this delay prevents "No answer returned" failures.
     """
     import math
     import os
@@ -2644,6 +2759,7 @@ def notebook_digest_multi(
                     markers += 1
             return markers >= 2
         except Exception:
+            logger.debug("_is_digest_valid failed for %s", filepath, exc_info=True)
             return False
 
     # ── Shared progress tracking (thread-safe) ──
@@ -2669,6 +2785,9 @@ def notebook_digest_multi(
 
         For each case: add source → query → validate → save → DELETE source.
         One case at a time (batch_size=1) eliminates all split/regex issues.
+
+        Auth-resilient: detects auth expiration mid-flight, triggers recovery,
+        and retries the current case with fresh credentials.
         """
         nb_id = chunk["notebook_id"]
         paths = chunk["file_paths"]
@@ -2676,6 +2795,8 @@ def notebook_digest_multi(
         chunk_results = []
         sources_deleted = 0
         nb_queries = 0
+        consecutive_auth_failures = 0
+        MAX_CONSECUTIVE_AUTH_FAILURES = 3  # Abort thread after 3 failed recoveries
 
         # Pre-filter: compute titles/paths, skip already-done files
         pending = []
@@ -2709,6 +2830,23 @@ def notebook_digest_multi(
             path = item["path"]
             source_id = None
 
+            # Check if we've had too many consecutive auth failures
+            if consecutive_auth_failures >= MAX_CONSECUTIVE_AUTH_FAILURES:
+                _log_progress(
+                    f"NB{nb_idx}: 🛑 Aborting — {consecutive_auth_failures} consecutive "
+                    f"auth failures. Remaining {len(pending) - pending.index(item)} files skipped."
+                )
+                # Mark all remaining as failed
+                for remaining in pending[pending.index(item):]:
+                    with _progress_lock:
+                        _progress["done"] += 1
+                        _progress["failed"] += 1
+                    chunk_results.append({
+                        **remaining, "status": "failed",
+                        "error": "Aborted: auth recovery exhausted",
+                    })
+                break
+
             if not os.path.exists(path):
                 chunk_results.append({
                     **item, "status": "failed", "error": "File not found",
@@ -2721,6 +2859,7 @@ def notebook_digest_multi(
                     with open(path, "r", encoding="utf-8") as f:
                         text = f.read()
                 except UnicodeDecodeError:
+                    logger.info("NB%d: UTF-8 decode failed for %s, falling back to latin-1", nb_idx, path)
                     with open(path, "r", encoding="latin-1") as f:
                         text = f.read()
 
@@ -2747,8 +2886,39 @@ def notebook_digest_multi(
                             if key:  # skip empty keys
                                 frontmatter[key] = val
 
-                # ── Add source ──
-                add_result = client.add_text_source(nb_id, text=text, title=item["title"])
+                # ── Add source (with auth recovery) ──
+                add_result = None
+                for add_attempt in range(1, 3):  # 2 attempts for add
+                    try:
+                        current_client = get_client()
+                        add_result = current_client.add_text_source(nb_id, text=text, title=item["title"])
+                        if add_result:
+                            consecutive_auth_failures = 0  # Reset on success
+                            break
+                        # add_text_source returned None — could be auth issue
+                        # Try recovery before second attempt
+                        if add_attempt < 2:
+                            _log_progress(f"NB{nb_idx}: ⚠️ add source returned None for {item['title'][:30]}, attempting recovery...")
+                            if _attempt_auth_recovery(f"NB{nb_idx}"):
+                                time.sleep(1)
+                                continue
+                    except Exception as add_err:
+                        if _is_auth_error(add_err) and add_attempt < 2:
+                            _log_progress(f"NB{nb_idx}: 🔑 Auth error on add source: {str(add_err)[:50]}")
+                            logger.warning("NB%d: Auth error adding source for '%s'", nb_idx, item['title'][:40], exc_info=True)
+                            if _attempt_auth_recovery(f"NB{nb_idx}"):
+                                time.sleep(1)
+                                continue
+                            else:
+                                consecutive_auth_failures += 1
+                                logger.error("NB%d: Auth recovery failed for add source, consecutive=%d", nb_idx, consecutive_auth_failures)
+                        else:
+                            # Non-auth error — log it
+                            _log_progress(f"NB{nb_idx}: ❌ add source exception: {str(add_err)[:80]}")
+                            logger.error("NB%d: Non-auth error adding source for '%s'", nb_idx, item['title'][:40], exc_info=True)
+                        add_result = None
+                        break
+
                 if not add_result:
                     with _progress_lock:
                         _progress["done"] += 1
@@ -2763,12 +2933,19 @@ def notebook_digest_multi(
                 item["source_id"] = source_id
                 item["input_size"] = len(text.encode("utf-8"))
 
-                # ── Query with retry ──
+                # ── Post-add delay: let NotebookLM index the source ──
+                if post_add_delay > 0:
+                    time.sleep(post_add_delay)
+
+                # ── Query with auth-aware retry ──
                 answer = None
                 last_error = None
+                auth_recovered_this_case = False
+
                 for attempt in range(1, max_retries + 1):
                     try:
-                        result = client.query(
+                        current_client = get_client()
+                        result = current_client.query(
                             nb_id, query_text=query_template,
                             source_ids=[source_id],
                         )
@@ -2777,12 +2954,58 @@ def notebook_digest_multi(
                             _total_queries["count"] += 1
                         if result and result.get("answer"):
                             answer = result["answer"]
+                            consecutive_auth_failures = 0  # Reset on success
                             break
                         last_error = "No answer returned"
+                        logger.info(
+                            "NB%d: Query attempt %d/%d returned no answer for '%s'",
+                            nb_idx, attempt, max_retries, item['title'][:40],
+                        )
                         if attempt < max_retries:
                             time.sleep(2)
                     except Exception as e:
                         last_error = str(e)
+
+                        # ── Auth-error detection ──
+                        if _is_auth_error(e) and not auth_recovered_this_case:
+                            _log_progress(
+                                f"NB{nb_idx}: 🔑 Auth error on query (attempt {attempt}): "
+                                f"{str(e)[:50]}"
+                            )
+                            if _attempt_auth_recovery(f"NB{nb_idx}"):
+                                auth_recovered_this_case = True
+                                # Delete old source (best-effort, may fail with old auth)
+                                try:
+                                    current_client.delete_source(source_id)
+                                except Exception:
+                                    logger.debug("NB%d: Could not delete old source %s during auth recovery (expected)", nb_idx, source_id, exc_info=True)
+                                source_id = None
+
+                                # Re-add source with fresh client
+                                time.sleep(1)
+                                try:
+                                    fresh_client = get_client()
+                                    re_add = fresh_client.add_text_source(
+                                        nb_id, text=text, title=item["title"]
+                                    )
+                                    if re_add:
+                                        source_id = re_add.get("id")
+                                        item["source_id"] = source_id
+                                        _log_progress(f"NB{nb_idx}: 🔄 Re-added source after auth recovery, retrying query...")
+                                        continue  # Retry the query with fresh source
+                                    else:
+                                        last_error = "Re-add source failed after auth recovery"
+                                        logger.warning("NB%d: Re-add source returned None after auth recovery", nb_idx)
+                                except Exception as re_add_err:
+                                    last_error = f"Re-add after recovery failed: {re_add_err}"
+                                    logger.error("NB%d: Re-add source failed after auth recovery", nb_idx, exc_info=True)
+                            else:
+                                consecutive_auth_failures += 1
+                                last_error = f"Auth recovery failed: {e}"
+                            break  # Don't retry if recovery failed
+
+                        # Non-auth error — normal retry with backoff
+                        logger.warning("NB%d: Query error (attempt %d/%d): %s", nb_idx, attempt, max_retries, last_error, exc_info=True)
                         if attempt < max_retries:
                             time.sleep(2)
 
@@ -2790,7 +3013,11 @@ def notebook_digest_multi(
                     with _progress_lock:
                         _progress["done"] += 1
                         _progress["failed"] += 1
-                    _log_progress(f"NB{nb_idx}: ❌ {_progress['done']}/{n_files} {item['title'][:40]} — query failed")
+                    _log_progress(f"NB{nb_idx}: ❌ {_progress['done']}/{n_files} {item['title'][:40]} — query failed: {last_error}")
+                    logger.warning(
+                        "NB%d: Query exhausted %d retries for '%s': %s",
+                        nb_idx, max_retries, item['title'], last_error,
+                    )
                     chunk_results.append({
                         **item, "status": "failed",
                         "error": f"Query failed after {max_retries} attempts: {last_error}",
@@ -2875,6 +3102,10 @@ def notebook_digest_multi(
                     f"NB{nb_idx}: ❌ {_progress['done']}/{n_files} "
                     f"{item['title'][:40]} — {str(e)[:60]}"
                 )
+                logger.error(
+                    "NB%d: Unhandled exception processing '%s'",
+                    nb_idx, item['title'][:40], exc_info=True,
+                )
                 chunk_results.append({
                     **item, "status": "failed", "error": str(e),
                 })
@@ -2882,10 +3113,13 @@ def notebook_digest_multi(
                 # ── LIFO cleanup: always delete source ──
                 if source_id:
                     try:
-                        client.delete_source(source_id)
+                        get_client().delete_source(source_id)
                         sources_deleted += 1
                     except Exception:
-                        pass  # Best-effort cleanup
+                        logger.warning(
+                            "NB%d: LIFO cleanup failed to delete source %s for '%s'",
+                            nb_idx, source_id, item.get('title', '?')[:30], exc_info=True,
+                        )
 
         _log_progress(f"NB{nb_idx}: finished — {len(chunk_results)} processed, {sources_deleted} sources cleaned")
         return chunk_results
