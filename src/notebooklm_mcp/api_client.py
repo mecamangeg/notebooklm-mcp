@@ -897,9 +897,12 @@ class NotebookLMClient:
         """
         client = self._get_client()
 
+        # Proto arg format: [%project_id%, %query%]
+        # Source: orchestration.proto DiscoverSourcesRequest
         params = [notebook_id, query]
         body = self._build_request_body(self.RPC_DISCOVER_SOURCES, params)
-        url = self._build_url(self.RPC_DISCOVER_SOURCES, f"/notebook/{notebook_id}")
+        # Use root source-path (not notebook-scoped) — matches Go client pattern
+        url = self._build_url(self.RPC_DISCOVER_SOURCES, "/")
 
         response = client.post(url, content=body)
         response.raise_for_status()
@@ -2916,10 +2919,12 @@ class NotebookLMClient:
 
         client = self._get_client()
 
-        # Payload: [notebook_id, [note_ids]]
-        params = [notebook_id, note_ids]
+        # Proto arg format: [%note_ids%]  (just the IDs list, NO notebook_id prefix)
+        # Source: orchestration.proto DeleteNotesRequest + EncodeDeleteNotesArgs
+        params = [note_ids]
 
         body = self._build_request_body(self.RPC_DELETE_NOTES, params)
+        # URL uses notebook_id for the source-path (routing only, not in payload)
         url = self._build_url(self.RPC_DELETE_NOTES, f"/notebook/{notebook_id}")
 
         response = client.post(url, content=body)
@@ -2928,7 +2933,8 @@ class NotebookLMClient:
         parsed = self._parse_response(response.text)
         result = self._extract_rpc_result(parsed, self.RPC_DELETE_NOTES)
 
-        return result is not None
+        # DeleteNotes returns an empty response on success (google.protobuf.Empty)
+        return result is not None or response.status_code == 200
 
     # =========================================================================
     # ActOnSources — AI Transformations (tmc/nlm Phase 2 port)
