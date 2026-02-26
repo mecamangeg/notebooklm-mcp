@@ -598,6 +598,7 @@ def upload_markdown_files_batch(
     output_dir: str,
     dry_run: bool = False,
     force: bool = False,
+    source_prefix: str = "[Angular]",
 ) -> dict:
     """Upload Markdown files to N notebooks in parallel using one batch RPC per notebook.
 
@@ -671,18 +672,23 @@ def upload_markdown_files_batch(
             try:
                 existing = get_notebook_sources(client, nb_id)
                 angular  = {s["title"]: s["id"] for s in existing
-                            if str(s.get("title", "")).startswith("[Angular]")}
+                            if str(s.get("title", "")).startswith(source_prefix)}
                 if angular:
-                    print(f"  {tag} 🔍 Empty log — found {len(angular)} existing [Angular] "
+                    print(f"  {tag} 🔍 Empty log — found {len(angular)} existing {source_prefix} "
                           f"sources in notebook. Seeding log to prevent duplicates...")
                     for md_path, content in file_contents:
                         stem  = Path(md_path).stem.replace("__", " / ").replace("_", " ")
-                        title = f"[Angular] {stem}"
+                        title = f"{source_prefix} {stem}"
                         if title in angular:
-                            # Record as-if previously uploaded with current content hash.
-                            # classify will then: skip (same hash) or update (changed hash).
-                            _record_upload(md_path, log_path, angular[title],
-                                           content, log_cache)
+                            src_id = angular[title]
+                            # Only seed if we have a real source ID that can be deleted.
+                            # batch-unknown IDs cannot be individually deleted, so we do NOT seed
+                            # them — the file stays classified as 'new', which is safe (no stale
+                            # copy to delete). Seeding with batch-unknown would cause 'update'
+                            # classification, and the failed delete would leave a duplicate.
+                            if src_id and src_id != "batch-unknown":
+                                _record_upload(md_path, log_path, src_id,
+                                               content, log_cache)
                     print(f"  {tag} ✅ Log seeded — {len([v for v in log_cache.values() if v])} "
                           f"entries. Classifying...")
             except Exception as e:
@@ -693,24 +699,24 @@ def upload_markdown_files_batch(
         sources_new:    list[dict] = []
 
         if force:
-            # --force: bulk-clear ALL [Angular] sources from this notebook before
+            # --force: bulk-clear ALL [source_prefix] sources from this notebook before
             # re-uploading. Individual source IDs in the log may be stale or
             # "batch-unknown", so per-source delete is unreliable and creates dupes.
             try:
-                cleared = clear_angular_sources(client, nb_id)
+                cleared = clear_angular_sources(client, nb_id, prefix=source_prefix)
                 if cleared:
-                    print(f"  {tag} Cleared {cleared} existing [Angular] sources (--force)")
+                    print(f"  {tag} Cleared {cleared} existing {source_prefix} sources (--force)")
             except Exception as e:
                 logger.warning("%s Could not pre-clear (--force): %s", tag, e)
             log_cache.clear()  # reset so all files are classified as new
             for md_path, content in file_contents:
                 title = Path(md_path).stem.replace("__", " / ").replace("_", " ")
-                sources_new.append({"text": content, "title": f"[Angular] {title}",
+                sources_new.append({"text": content, "title": f"{source_prefix} {title}",
                                     "_path": md_path})
         else:
             for md_path, content in file_contents:
                 title = Path(md_path).stem.replace("__", " / ").replace("_", " ")
-                entry = {"text": content, "title": f"[Angular] {title}", "_path": md_path}
+                entry = {"text": content, "title": f"{source_prefix} {title}", "_path": md_path}
                 st, old_sid = _check_upload_status_loaded(md_path, content, log_cache)
                 if st == "skip":
                     sources_skip.append(os.path.basename(md_path))
@@ -730,9 +736,30 @@ def upload_markdown_files_batch(
                     "failed": len(unreadable)}
 
         # Delete stale sources
+        # For sources whose ID is "batch-unknown" (the batch RPC didn't return individual IDs),
+        # we cannot call delete_source() with a junk string — it silently fails and leaves the
+        # old copy in the notebook, creating a duplicate when we re-upload.
+        # Fix: do a live title-match delete against the notebook for those entries.
+        unknown_titles = [s["title"] for s in sources_update
+                          if s.get("_old_source_id") in (None, "batch-unknown", "unknown")]
+        if unknown_titles:
+            try:
+                # Fetch live sources and delete ALL copies matching these titles
+                live_sources = get_notebook_sources(client, nb_id)
+                for live_src in live_sources:
+                    if live_src["title"] in unknown_titles:
+                        try:
+                            client.delete_source(live_src["id"])
+                            logger.debug("%s Title-deleted stale '%s' (%s)",
+                                         tag, live_src["title"][:50], live_src["id"][:8])
+                        except Exception as e:
+                            logger.warning("%s Could not title-delete %s: %s",
+                                           tag, live_src["id"][:8], e)
+            except Exception as e:
+                logger.warning("%s Live title-match delete failed: %s", tag, e)
         for s in sources_update:
             old_sid = s.get("_old_source_id")
-            if old_sid:
+            if old_sid and old_sid not in ("batch-unknown", "unknown"):
                 try:
                     client.delete_source(old_sid)
                 except Exception as e:
@@ -868,10 +895,10 @@ def get_notebook_sources(client, notebook_id: str) -> list[dict]:
         return []
 
 
-def clear_angular_sources(client, notebook_id: str) -> int:
-    """Delete all sources whose title starts with '[Angular]' from the notebook."""
+def clear_angular_sources(client, notebook_id: str, prefix: str = "[Angular]") -> int:
+    """Delete all sources whose title starts with `prefix` from the notebook."""
     sources = get_notebook_sources(client, notebook_id)
-    angular_sources = [s for s in sources if s["title"].startswith("[Angular]")]
+    angular_sources = [s for s in sources if s["title"].startswith(prefix)]
     deleted = 0
     for src in angular_sources:
         try:
@@ -1072,6 +1099,11 @@ def main():
              "(default: keep in notebook permanently).",
     )
     parser.add_argument(
+        "--source-prefix", default="[Angular]", metavar="PREFIX",
+        help="Title prefix added to every uploaded source (default: [Angular]). "
+             "Use a different prefix (e.g. [AngularTest]) to isolate test uploads.",
+    )
+    parser.add_argument(
         "--clear-existing", action="store_true",
         help="Before uploading, delete all existing [Angular] sources from the notebook.",
     )
@@ -1191,11 +1223,12 @@ def main():
 
         # Optional: clear existing Angular sources from ALL notebooks
         if args.clear_existing:
-            print(f"  🧹 Clearing existing [Angular] sources from {len(notebook_ids)} notebook(s)...")
+            pfx = getattr(args, "source_prefix", "[Angular]")
+            print(f"  🧹 Clearing existing {pfx} sources from {len(notebook_ids)} notebook(s)...")
             for nb_id in notebook_ids:
                 try:
                     client = get_client()
-                    deleted = clear_angular_sources(client, nb_id)
+                    deleted = clear_angular_sources(client, nb_id, prefix=pfx)
                     print(f"     [{nb_id[:8]}...] Deleted {deleted} source(s).")
                 except Exception as e:
                     print(f"  ⚠️  [{nb_id[:8]}...] Could not clear: {e}", file=sys.stderr)
@@ -1221,6 +1254,7 @@ def main():
                 output_dir=args.output_dir,
                 dry_run=args.dry_run,
                 force=args.force,
+                source_prefix=getattr(args, "source_prefix", "[Angular]"),
             )
 
     # ── Phase 3: Query ──
