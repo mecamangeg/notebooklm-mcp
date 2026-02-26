@@ -3196,6 +3196,41 @@ def notebook_digest_multi(
 
 
 
+
+# ============================================================================
+# Source Discovery Tool (Phase 4 — tmc/nlm port)
+# ============================================================================
+
+@mcp.tool()
+def source_discover(
+    notebook_id: str,
+    query: str,
+) -> dict[str, Any]:
+    """Discover new web sources using NotebookLM's internal research engine.
+
+    Same as clicking 'Add sources → Web research' in the NLM UI.
+    Returns candidate URLs with titles and snippets — then use
+    notebook_add_url to import the ones you want.
+
+    Args:
+        notebook_id: Notebook UUID (research runs in its context)
+        query: What to search for (e.g. "Firebase Auth custom claims 2025")
+    """
+    try:
+        client = get_client()
+        sources = client.discover_sources(notebook_id=notebook_id, query=query)
+        return {
+            "status": "success",
+            "notebook_id": notebook_id,
+            "query": query,
+            "count": len(sources),
+            "sources": sources,
+            "hint": "Use notebook_add_url to import any of these sources into the notebook.",
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 # ============================================================================
 # Notes Tools (Phase 1 — tmc/nlm port)
 # ============================================================================

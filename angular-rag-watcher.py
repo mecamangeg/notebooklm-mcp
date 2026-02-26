@@ -729,6 +729,10 @@ except ImportError:
 def _startup_sync(project: str, output_dir: str):
     """Queue any bundles whose .md is missing or older than source files.
     Uses the _BundleCache stem_map — avoids a second os.walk.
+
+    Also handles explicit --watch-files entries: they may not appear in the
+    stem_map (since they sit outside src/ or have non-component stems), so we
+    check them directly and queue if stale.
     """
     log("🔍", "Startup sync — checking for stale bundles...")
 
@@ -746,6 +750,22 @@ def _startup_sync(project: str, output_dir: str):
         if stale:
             _queue.enqueue(_FileOp(abs_path=files[0].abs_path, kind="change"))
             queued += 1
+
+    # ── Also check explicit --watch-files entries ─────────────────────
+    # These files may not have a matching stem in stem_map (e.g. firebase.json
+    # at the project root). Queue them separately if their output .md is stale.
+    if _args_ref and hasattr(_args_ref, "watch_files_abs"):
+        for abs_path_posix in _args_ref.watch_files_abs:
+            if not os.path.isfile(abs_path_posix):
+                continue
+            safe   = _safe_name(os.path.splitext(os.path.basename(abs_path_posix))[0])
+            md_out = os.path.join(output_dir, f"{safe}.md")
+            stale  = not os.path.exists(md_out)
+            if not stale:
+                stale = os.path.getmtime(abs_path_posix) > os.path.getmtime(md_out)
+            if stale:
+                _queue.enqueue(_FileOp(abs_path=abs_path_posix, kind="change"))
+                queued += 1
 
     if queued:
         log("📋", f"Startup sync: {queued} bundle(s) queued for update")

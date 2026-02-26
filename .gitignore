@@ -70,3 +70,8 @@ actually_missing_files.json
 # YouTube context extraction outputs (large generated files)
 OUTPUT/
 YOUTUBE-CONTEXTS/
+
+# Angular RAG watcher output directories (large generated .md files)
+ANGULAR-RAG-BACKEND/
+ANGULAR-RAG-WORKFLOWS/
+ANGULAR-RAG-CONFIG/

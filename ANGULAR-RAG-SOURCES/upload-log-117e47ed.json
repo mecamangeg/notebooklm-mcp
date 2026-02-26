@@ -71,9 +71,9 @@
   },
   "components__chat__parsed-content.md": {
     "source_id": "batch-unknown",
-    "uploaded_at": 1772108772.1829479,
+    "uploaded_at": 1772122903.4006066,
     "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__parsed-content.md",
-    "content_hash": "0b8a9130f13b2447156ace4854ed50d1",
+    "content_hash": "8e7b60e406456ef5182eb403ae289b9c",
     "format_version": 2
   },
   "components__chat__pipeline-debug-panel.md": {
@@ -232,9 +232,9 @@
   },
   "services__grounding-audit.service.md": {
     "source_id": "batch-unknown",
-    "uploaded_at": 1772108772.234284,
+    "uploaded_at": 1772122903.404627,
     "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__grounding-audit.service.md",
-    "content_hash": "2c9b642b07c1a9a60865957f3063267e",
+    "content_hash": "72df3125f9c5c27932486e3f0a8d9c51",
     "format_version": 2
   },
   "services__session.service.md": {

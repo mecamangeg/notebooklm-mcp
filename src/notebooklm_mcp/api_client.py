@@ -75,8 +75,41 @@ class Notebook:
         return "shared_with_me"
 
 
+class ReqIDGenerator:
+    """Synthetic batchexecute request-ID generator.
+
+    Ported from tmc/nlm's pattern. Google's backend validates only that IDs
+    are unique and increasing per session — not that they originated from the
+    page's JavaScript. This means we can generate them without scraping the
+    NotebookLM homepage for ``f.sid``.
+
+    The ``f.sid`` URL parameter is purely for session correlation on Google's
+    logging infrastructure. Requests succeed with a synthetic value (or even
+    without it, since ``_build_url`` already skips it when ``_session_id`` is
+    empty).
+
+    Usage (internal to NotebookLMClient)::
+
+        gen = ReqIDGenerator()
+        reqid = gen.next()    # "1234000000"
+        reqid = gen.next()    # "1234100000"
+    """
+
+    def __init__(self) -> None:
+        import random
+        self._base = random.randint(1000, 9999)
+        self._seq = 0
+
+    def next(self) -> str:
+        """Return next request ID as a string."""
+        reqid = self._base + (self._seq * 100000)
+        self._seq += 1
+        return str(reqid)
+
+
 class NotebookLMClient:
     """Client for NotebookLM MCP internal API."""
+
 
     BASE_URL = "https://notebooklm.google.com"
     BATCHEXECUTE_URL = f"{BASE_URL}/_/LabsTailwindUi/data/batchexecute"
@@ -118,6 +151,20 @@ class NotebookLMClient:
     # Note type constants (position inside the CYK0Xb / cFji9 metadata)
     NOTE_TYPE_PLAIN = 1    # Regular plain-text note
     NOTE_TYPE_MIND_MAP = 5  # Mind map artifact (existing generate_mind_map flow)
+
+    # Discover Sources (tmc/nlm: DiscoverSources — notebook's internal web research)
+    RPC_DISCOVER_SOURCES = "qXyaNe"
+
+    # Source type constants decoded from orchestration.proto (tmc/nlm Phase 6)
+    SOURCE_TYPE_UNSPECIFIED  = 0
+    SOURCE_TYPE_TEXT         = 2   # Pasted text
+    SOURCE_TYPE_GOOGLE_DOCS  = 3
+    SOURCE_TYPE_GOOGLE_SLIDES= 4
+    SOURCE_TYPE_GOOGLE_SHEETS= 5
+    SOURCE_TYPE_LOCAL_FILE   = 6
+    SOURCE_TYPE_WEB_PAGE     = 7
+    SOURCE_TYPE_SHARED_NOTE  = 8   # A note shared between notebooks
+    SOURCE_TYPE_YOUTUBE      = 9
 
     # Research RPCs (source discovery)
     RPC_START_FAST_RESEARCH = "Ljjv0c"  # Start Fast Research (Web or Drive)
@@ -833,6 +880,51 @@ class NotebookLMClient:
             if isinstance(inner, list) and len(inner) >= 2:
                 return inner[1]  # true = fresh, false = stale
         return None
+
+    def discover_sources(self, notebook_id: str, query: str) -> list[dict]:
+        """Discover new sources via NotebookLM's internal web research.
+
+        Uses RPC qXyaNe (DiscoverSources from tmc/nlm orchestration.proto).
+        This is the same as clicking "Add sources → Web research" in the NLM UI.
+        Returns candidate sources that can then be imported via add_url_source().
+
+        Args:
+            notebook_id: The notebook UUID to research in context of
+            query: Search query (e.g. "Firebase authentication patterns 2025")
+
+        Returns:
+            List of dicts with url, title, and snippet for each discovered source
+        """
+        client = self._get_client()
+
+        params = [notebook_id, query]
+        body = self._build_request_body(self.RPC_DISCOVER_SOURCES, params)
+        url = self._build_url(self.RPC_DISCOVER_SOURCES, f"/notebook/{notebook_id}")
+
+        response = client.post(url, content=body)
+        response.raise_for_status()
+
+        parsed = self._parse_response(response.text)
+        result = self._extract_rpc_result(parsed, self.RPC_DISCOVER_SOURCES)
+
+        sources = []
+        if result and isinstance(result, list) and len(result) > 0:
+            source_list = result[0] if isinstance(result[0], list) else []
+            for src in source_list:
+                if not isinstance(src, list):
+                    continue
+                # Typical shape: [url, title, snippet, ...]
+                src_url     = src[0] if len(src) > 0 else None
+                src_title   = src[1] if len(src) > 1 else ""
+                src_snippet = src[2] if len(src) > 2 else ""
+                if src_url:
+                    sources.append({
+                        "url": src_url,
+                        "title": src_title,
+                        "snippet": src_snippet,
+                    })
+
+        return sources
 
     def sync_drive_source(self, source_id: str) -> dict | None:
         """Sync a Drive source with the latest content from Google Drive.
