@@ -99,6 +99,26 @@ class NotebookLMClient:
     RPC_GET_SUMMARY = "VfAZjd"  # Get notebook summary and suggested report topics
     RPC_GET_SOURCE_GUIDE = "tr032e"  # Get source guide (AI summary + keyword chips)
 
+    # Notes RPCs (plain text notes in the sidebar, NOT mind maps)
+    # Mind maps also use CYK0Xb/cFji9 but with note_type=5 in their metadata.
+    # Plain notes use note_type=1; this API writes to the same underlying endpoint
+    # with different metadata fields, matching tmc/nlm's RPCCreateNote / RPCGetNotes.
+    RPC_CREATE_NOTE = "CYK0Xb"   # Create or overwrite a note (also used for mind maps)
+    RPC_LIST_NOTES = "cFji9"      # List notes in a notebook (also used for mind maps)
+    RPC_UPDATE_NOTE = "cYAfTb"    # Mutate (edit) an existing note
+    RPC_DELETE_NOTES = "AH0mwd"   # Delete one or more notes by ID
+
+    # ActOnSources — AI transformations applied to selected sources
+    # Same RPC as generate_mind_map (yyryJe), differentiated only by the action string.
+    # Valid actions: summarize | rephrase | expand | critique | brainstorm | verify |
+    #                explain | outline | study_guide | faq | briefing_doc |
+    #                interactive_mindmap | timeline | table_of_contents
+    RPC_ACT_ON_SOURCES = "yyryJe"
+
+    # Note type constants (position inside the CYK0Xb / cFji9 metadata)
+    NOTE_TYPE_PLAIN = 1    # Regular plain-text note
+    NOTE_TYPE_MIND_MAP = 5  # Mind map artifact (existing generate_mind_map flow)
+
     # Research RPCs (source discovery)
     RPC_START_FAST_RESEARCH = "Ljjv0c"  # Start Fast Research (Web or Drive)
     RPC_START_DEEP_RESEARCH = "QA9ei"   # Start Deep Research (Web only)
@@ -2612,6 +2632,305 @@ class NotebookLMClient:
             3: "default",
         }
         return lengths.get(length_code, "unknown")
+
+    # =========================================================================
+    # Notes Management (tmc/nlm Phase 1 port)
+    # =========================================================================
+
+    def get_notes(self, notebook_id: str) -> list[dict]:
+        """List all plain-text notes in a notebook.
+
+        Uses RPC cFji9 — the same underlying endpoint as list_mind_maps(),
+        but returns all note entries regardless of type. Plain notes have
+        note_type=1 in their metadata; mind maps have note_type=5.
+
+        Args:
+            notebook_id: The notebook UUID
+
+        Returns:
+            List of note dicts: {note_id, title, content, note_type, created_at}
+        """
+        client = self._get_client()
+
+        params = [notebook_id]
+        body = self._build_request_body(self.RPC_LIST_NOTES, params)
+        url = self._build_url(self.RPC_LIST_NOTES, f"/notebook/{notebook_id}")
+
+        response = client.post(url, content=body)
+        response.raise_for_status()
+
+        parsed = self._parse_response(response.text)
+        result = self._extract_rpc_result(parsed, self.RPC_LIST_NOTES)
+
+        notes = []
+        if result and isinstance(result, list) and len(result) > 0:
+            note_list = result[0] if isinstance(result[0], list) else []
+
+            for note_data in note_list:
+                if not isinstance(note_data, list) or len(note_data) < 2:
+                    continue
+
+                note_id = note_data[0]
+                details = note_data[1] if len(note_data) > 1 else []
+
+                if not isinstance(details, list):
+                    continue
+
+                # Details: [note_id, content, metadata, null, title]
+                # metadata: [note_type, null, [created_ts], ...]
+                content = details[1] if len(details) > 1 else ""
+                metadata = details[2] if len(details) > 2 else []
+                title = details[4] if len(details) > 4 else "Untitled"
+
+                note_type = None
+                created_at = None
+                if isinstance(metadata, list):
+                    note_type = metadata[0] if len(metadata) > 0 else None
+                    if len(metadata) > 2:
+                        created_at = parse_timestamp(metadata[2])
+
+                notes.append({
+                    "note_id": note_id,
+                    "title": title,
+                    "content": content,
+                    "note_type": note_type,   # 1=plain note, 5=mind map
+                    "created_at": created_at,
+                })
+
+        return notes
+
+    def create_note(
+        self,
+        notebook_id: str,
+        content: str,
+        title: str = "Note",
+    ) -> dict | None:
+        """Create a plain-text note in a notebook.
+
+        Uses RPC CYK0Xb (same as save_mind_map) but with NOTE_TYPE_PLAIN=1
+        in the metadata, producing a regular sidebar note instead of a mind map.
+
+        Args:
+            notebook_id: The notebook UUID
+            content: Note body (plain text or markdown)
+            title: Note display title
+
+        Returns:
+            Dict with note_id and title, or None on failure
+        """
+        client = self._get_client()
+
+        # metadata: [note_type, null, null, null, []]
+        # note_type=1 → plain note (vs 5 → mind map)
+        metadata = [self.NOTE_TYPE_PLAIN, None, None, None, []]
+
+        params = [
+            notebook_id,
+            content,
+            metadata,
+            None,
+            title,
+        ]
+
+        body = self._build_request_body(self.RPC_CREATE_NOTE, params)
+        url = self._build_url(self.RPC_CREATE_NOTE, f"/notebook/{notebook_id}")
+
+        response = client.post(url, content=body)
+        response.raise_for_status()
+
+        parsed = self._parse_response(response.text)
+        result = self._extract_rpc_result(parsed, self.RPC_CREATE_NOTE)
+
+        if result and isinstance(result, list) and len(result) > 0:
+            inner = result[0] if isinstance(result[0], list) else result
+            note_id = inner[0] if len(inner) > 0 else None
+            saved_title = inner[4] if len(inner) > 4 else title
+
+            return {
+                "note_id": note_id,
+                "notebook_id": notebook_id,
+                "title": saved_title,
+                "content": content,
+            }
+
+        return None
+
+    def update_note(
+        self,
+        notebook_id: str,
+        note_id: str,
+        content: str,
+        title: str,
+    ) -> dict | None:
+        """Edit an existing plain-text note.
+
+        Uses RPC cYAfTb — the dedicated MutateNote endpoint from tmc/nlm.
+
+        Args:
+            notebook_id: The notebook UUID (used for URL path)
+            note_id: The note UUID to update
+            content: New body text (replaces existing)
+            title: New title (replaces existing)
+
+        Returns:
+            Dict with note_id and updated title, or None on failure
+        """
+        client = self._get_client()
+
+        # Payload mirrors nlm's RPCMutateNote: [project_id, note_id, updates]
+        # updates = [[content, title, tags=[]]]
+        params = [
+            notebook_id,
+            note_id,
+            [[content, title, []]],
+        ]
+
+        body = self._build_request_body(self.RPC_UPDATE_NOTE, params)
+        url = self._build_url(self.RPC_UPDATE_NOTE, f"/notebook/{notebook_id}")
+
+        response = client.post(url, content=body)
+        response.raise_for_status()
+
+        parsed = self._parse_response(response.text)
+        result = self._extract_rpc_result(parsed, self.RPC_UPDATE_NOTE)
+
+        # A successful mutate typically returns the updated note structure
+        if result is not None:
+            inner = result[0] if (isinstance(result, list) and isinstance(result[0], list)) else result
+            return {
+                "note_id": note_id,
+                "notebook_id": notebook_id,
+                "title": title,
+                "content": content,
+                "raw": inner,
+            }
+
+        return None
+
+    def delete_notes(self, notebook_id: str, note_ids: list[str]) -> bool:
+        """Delete one or more notes from a notebook.
+
+        Uses RPC AH0mwd — the DeleteNotes endpoint from tmc/nlm.
+
+        Args:
+            notebook_id: The notebook UUID (used for URL path)
+            note_ids: List of note UUIDs to delete
+
+        Returns:
+            True on success, False on failure
+        """
+        if not note_ids:
+            return False
+
+        client = self._get_client()
+
+        # Payload: [notebook_id, [note_ids]]
+        params = [notebook_id, note_ids]
+
+        body = self._build_request_body(self.RPC_DELETE_NOTES, params)
+        url = self._build_url(self.RPC_DELETE_NOTES, f"/notebook/{notebook_id}")
+
+        response = client.post(url, content=body)
+        response.raise_for_status()
+
+        parsed = self._parse_response(response.text)
+        result = self._extract_rpc_result(parsed, self.RPC_DELETE_NOTES)
+
+        return result is not None
+
+    # =========================================================================
+    # ActOnSources — AI Transformations (tmc/nlm Phase 2 port)
+    # =========================================================================
+
+    # All valid action strings for act_on_sources()
+    ACT_ON_SOURCES_ACTIONS = frozenset({
+        "summarize",
+        "rephrase",
+        "expand",
+        "critique",
+        "brainstorm",
+        "verify",
+        "explain",
+        "outline",
+        "study_guide",
+        "faq",
+        "briefing_doc",
+        "interactive_mindmap",
+        "timeline",
+        "table_of_contents",
+    })
+
+    def act_on_sources(
+        self,
+        source_ids: list[str],
+        action: str,
+        focus_prompt: str = "",
+    ) -> dict | None:
+        """Apply an AI transformation to selected sources.
+
+        Uses the same RPC as generate_mind_map (yyryJe) but with a different
+        action string. This is how NotebookLM implements all content
+        transformations internally. The "interactive_mindmap" action string
+        is exactly what generate_mind_map() calls — confirming the mapping.
+
+        Args:
+            source_ids: List of source UUIDs to transform
+            action: One of the 14 valid action strings (see ACT_ON_SOURCES_ACTIONS)
+            focus_prompt: Optional guiding instruction (e.g. "Focus on tax law")
+
+        Returns:
+            Dict with generated_text and generation_id, or None on failure
+
+        Raises:
+            ValueError: If action is not in ACT_ON_SOURCES_ACTIONS
+        """
+        if action not in self.ACT_ON_SOURCES_ACTIONS:
+            raise ValueError(
+                f"Invalid action '{action}'. Must be one of: "
+                + ", ".join(sorted(self.ACT_ON_SOURCES_ACTIONS))
+            )
+
+        client = self._get_client()
+
+        # Build source IDs in the nested format used by generate_mind_map
+        sources_nested = [[[sid]] for sid in source_ids]
+
+        # Payload mirrors generate_mind_map exactly — only the action string differs.
+        # "[CONTEXT]" is the placeholder that NotebookLM replaces with source content.
+        context_prompt = focus_prompt if focus_prompt else "[CONTEXT]"
+        params = [
+            sources_nested,
+            None, None, None, None,
+            [action, [[context_prompt, ""]], ""],
+            None,
+            [2, None, [1]],
+        ]
+
+        body = self._build_request_body(self.RPC_ACT_ON_SOURCES, params)
+        url = self._build_url(self.RPC_ACT_ON_SOURCES)
+
+        response = client.post(url, content=body)
+        response.raise_for_status()
+
+        parsed = self._parse_response(response.text)
+        result = self._extract_rpc_result(parsed, self.RPC_ACT_ON_SOURCES)
+
+        if result and isinstance(result, list) and len(result) > 0:
+            inner = result[0] if isinstance(result[0], list) else result
+            generated_text = inner[0] if isinstance(inner[0], str) else None
+            generation_info = inner[2] if len(inner) > 2 else None
+            generation_id = None
+            if isinstance(generation_info, list) and len(generation_info) > 0:
+                generation_id = generation_info[0]
+
+            return {
+                "action": action,
+                "generated_text": generated_text,
+                "generation_id": generation_id,
+                "source_ids": source_ids,
+            }
+
+        return None
 
     def close(self) -> None:
         """Close the HTTP client."""

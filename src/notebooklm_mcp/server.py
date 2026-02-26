@@ -3194,6 +3194,233 @@ def notebook_digest_multi(
         "progress_log": _progress_log,
     }
 
+
+
+# ============================================================================
+# Notes Tools (Phase 1 — tmc/nlm port)
+# ============================================================================
+
+@mcp.tool()
+def notebook_list_notes(notebook_id: str) -> dict[str, Any]:
+    """List all notes in a notebook sidebar.
+
+    Returns both plain-text notes (note_type=1) and mind maps (note_type=5).
+    Use this to find existing notes before creating or updating them.
+
+    Args:
+        notebook_id: Notebook UUID
+    """
+    try:
+        client = get_client()
+        notes = client.get_notes(notebook_id)
+        plain_notes = [n for n in notes if n.get("note_type") == 1]
+        mind_maps = [n for n in notes if n.get("note_type") == 5]
+        other = [n for n in notes if n.get("note_type") not in (1, 5)]
+
+        return {
+            "status": "success",
+            "notebook_id": notebook_id,
+            "count": len(notes),
+            "plain_notes_count": len(plain_notes),
+            "mind_maps_count": len(mind_maps),
+            "notes": notes,
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def notebook_create_note(
+    notebook_id: str,
+    content: str,
+    title: str = "Note",
+) -> dict[str, Any]:
+    """Create a plain-text note in the notebook sidebar.
+
+    **Write-back RAG loop:** Use this to save query answers as permanent notes.
+    Example: after notebook_query(), call notebook_create_note() to persist
+    the answer directly into the notebook — visible in the NLM UI.
+
+    Args:
+        notebook_id: Notebook UUID
+        content: Note body (plain text or markdown, no size limit enforced)
+        title: Display title shown in the NLM sidebar
+    """
+    try:
+        client = get_client()
+        result = client.create_note(notebook_id, content=content, title=title)
+        if result:
+            return {
+                "status": "success",
+                "note": result,
+                "message": f"Note '{title}' saved to notebook. Visible in the NLM sidebar.",
+            }
+        return {"status": "error", "error": "create_note returned no result"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def notebook_update_note(
+    notebook_id: str,
+    note_id: str,
+    content: str,
+    title: str,
+) -> dict[str, Any]:
+    """Edit an existing note (replaces content and title in full).
+
+    Get note_id from notebook_list_notes first.
+
+    Args:
+        notebook_id: Notebook UUID
+        note_id: Note UUID (from notebook_list_notes)
+        content: New body text (fully replaces existing)
+        title: New title (fully replaces existing)
+    """
+    try:
+        client = get_client()
+        result = client.update_note(
+            notebook_id=notebook_id,
+            note_id=note_id,
+            content=content,
+            title=title,
+        )
+        if result:
+            return {
+                "status": "success",
+                "note": {
+                    "note_id": note_id,
+                    "notebook_id": notebook_id,
+                    "title": title,
+                },
+            }
+        return {"status": "error", "error": "update_note returned no result"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@mcp.tool()
+def notebook_delete_note(
+    notebook_id: str,
+    note_id: str,
+    confirm: bool = False,
+) -> dict[str, Any]:
+    """Delete a note permanently. IRREVERSIBLE. Requires confirm=True.
+
+    Get note_id from notebook_list_notes first.
+
+    Args:
+        notebook_id: Notebook UUID (required for URL path)
+        note_id: Note UUID to delete (from notebook_list_notes)
+        confirm: Must be True after user approval
+    """
+    if not confirm:
+        return {
+            "status": "error",
+            "error": "Deletion not confirmed. Ask the user to confirm, then set confirm=True.",
+            "warning": "This action is IRREVERSIBLE. The note will be permanently deleted.",
+        }
+    try:
+        client = get_client()
+        result = client.delete_notes(notebook_id=notebook_id, note_ids=[note_id])
+        if result:
+            return {
+                "status": "success",
+                "message": f"Note {note_id} permanently deleted.",
+            }
+        return {"status": "error", "error": "delete_notes returned no result"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+# ============================================================================
+# ActOnSources Tool (Phase 2 — tmc/nlm port)
+# ============================================================================
+
+_VALID_ACTIONS = sorted([
+    "summarize", "rephrase", "expand", "critique", "brainstorm",
+    "verify", "explain", "outline", "study_guide", "faq",
+    "briefing_doc", "interactive_mindmap", "timeline", "table_of_contents",
+])
+
+
+@mcp.tool()
+def source_transform(
+    notebook_id: str,
+    source_ids: list[str],
+    action: str,
+    save_as_note: bool = False,
+    note_title: str = "",
+    focus_prompt: str = "",
+) -> dict[str, Any]:
+    """Apply an AI transformation to selected sources (no extra LLM needed).
+
+    NotebookLM's own AI runs the transformation on your existing sources.
+    Optionally saves the output directly as a note in the notebook.
+
+    Valid actions:
+      summarize | rephrase | expand | critique | brainstorm | verify |
+      explain | outline | study_guide | faq | briefing_doc |
+      interactive_mindmap | timeline | table_of_contents
+
+    Args:
+        notebook_id: Notebook UUID (used if save_as_note=True)
+        source_ids: List of source UUIDs to transform
+        action: Transformation type (see valid actions above)
+        save_as_note: If True, saves generated output as a note in the notebook
+        note_title: Title for the saved note (defaults to "{action} — {date}")
+        focus_prompt: Optional guiding instruction for the transformation
+    """
+    try:
+        if action not in _VALID_ACTIONS:
+            return {
+                "status": "error",
+                "error": f"Invalid action '{action}'. Must be one of: {', '.join(_VALID_ACTIONS)}",
+            }
+
+        client = get_client()
+        result = client.act_on_sources(
+            source_ids=source_ids,
+            action=action,
+            focus_prompt=focus_prompt,
+        )
+
+        if not result:
+            return {"status": "error", "error": "act_on_sources returned no result"}
+
+        response: dict[str, Any] = {
+            "status": "success",
+            "action": action,
+            "source_count": len(source_ids),
+            "generated_text": result.get("generated_text", ""),
+            "generation_id": result.get("generation_id"),
+        }
+
+        # Optionally persist the output as a plain-text note
+        if save_as_note and result.get("generated_text"):
+            from datetime import date
+            title = note_title or f"{action.replace('_', ' ').title()} — {date.today()}"
+            note_result = client.create_note(
+                notebook_id=notebook_id,
+                content=result["generated_text"],
+                title=title,
+            )
+            if note_result:
+                response["note_saved"] = True
+                response["note_id"] = note_result.get("note_id")
+                response["note_title"] = title
+            else:
+                response["note_saved"] = False
+                response["note_error"] = "Note creation failed after successful transformation"
+
+        return response
+
+    except ValueError as e:
+        return {"status": "error", "error": str(e)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 def main():
     """Run the MCP server."""
     mcp.run()
