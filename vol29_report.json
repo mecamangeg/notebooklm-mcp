@@ -1,0 +1,850 @@
+{
+  "summary": {
+    "source_count": 89,
+    "digested_count": 25,
+    "missing_count": 64,
+    "success_rate": 28.1
+  },
+  "missing_stats": {
+    "avg_size": 21549,
+    "min_size": 4314,
+    "max_size": 50035
+  },
+  "present_stats": {
+    "avg_size": 28183,
+    "min_size": 8867,
+    "max_size": 90687
+  },
+  "missing_files": [
+    {
+      "file": "Asturias Sugar Central, Inc. vs Commissioner of Customs, No. L-19337, September 30, 1969.md",
+      "src_size": 30201
+    },
+    {
+      "file": "Aves vs Joson, No. L-29922, August 29, 1969.md",
+      "src_size": 47650
+    },
+    {
+      "file": "Balbarona vs Santos, Adm. Case No. 652, September 30, 1969.md",
+      "src_size": 8472
+    },
+    {
+      "file": "Beltran vs People's Homesite and Housing Corporation, No. L-25138, August 28, 1969.md",
+      "src_size": 19783
+    },
+    {
+      "file": "Board of Liquidators vs Ricma Trading Corp., No. L-24318, August 29, 1969.md",
+      "src_size": 48680
+    },
+    {
+      "file": "Bureau of Telecommunications vs Public Service Commission, No. L-27412, October 28, 1969.md",
+      "src_size": 13582
+    },
+    {
+      "file": "Cabungcal vs Cordova, No. L-24794, September 30, 1969.md",
+      "src_size": 22034
+    },
+    {
+      "file": "Chan Chin vs Local Civil Registrar of Manila, No. L-27159, September 17, 1969.md",
+      "src_size": 21182
+    },
+    {
+      "file": "Commissioner of Internal Revenue vs Ilagan Electric & Ice Plant, Inc., No. L-23081, September 30, 1969.md",
+      "src_size": 10991
+    },
+    {
+      "file": "Conde vs Superable. Jr., Adm, Case No. 812, September 30, 1969.md",
+      "src_size": 21306
+    },
+    {
+      "file": "Cornelio vs Court of Appeals, No. L-24334, September 30, 1969.md",
+      "src_size": 22421
+    },
+    {
+      "file": "De Leon vs Pampanga Sugar Development Co., Inc., No, L-26844, September 30, 1969.md",
+      "src_size": 15409
+    },
+    {
+      "file": "Diamalon vs Quintillan, Adm. Case No. 116, August 29, 1969.md",
+      "src_size": 7382
+    },
+    {
+      "file": "Dumlao vs, Diaz, No. L-24476, September 30, 1969.md",
+      "src_size": 7253
+    },
+    {
+      "file": "Enciso vs Remo, No. L-23670, September 30, 1969.md",
+      "src_size": 23921
+    },
+    {
+      "file": "Enrile vs Court of Appeals, No. L-27549, September 30, 1969.md",
+      "src_size": 30109
+    },
+    {
+      "file": "Fernandez Hermanos, Inc, vs Commissioner of Internal Revenue, No. L-21551, September 30, 1969.md",
+      "src_size": 47603
+    },
+    {
+      "file": "Formento vs, Court of Appeals, No. L-26442, August 29, 1969.md",
+      "src_size": 27454
+    },
+    {
+      "file": "Galeno vs Ticao, No. L-22355, September 30, 1969.md",
+      "src_size": 18659
+    },
+    {
+      "file": "Galeno vs, Ticao, No. L-22355, September 30, 1969.md",
+      "src_size": 8431
+    },
+    {
+      "file": "Guerrero vs Court of Appeals, No. L-22366, October 30, 1969.md",
+      "src_size": 19185
+    },
+    {
+      "file": "Heald Lumber Co. vs Tabios, No. L-23123, September 30, 1969.md",
+      "src_size": 7785
+    },
+    {
+      "file": "Insular Lumber Co. vs Court of Appeals, No. L-23857, August 29, 1969.md",
+      "src_size": 35900
+    },
+    {
+      "file": "Lanzar vs Guerrero, Sr., No. L-21581, August 28, 1969.md",
+      "src_size": 12721
+    },
+    {
+      "file": "Luzon Metal and Plumbing Works Co., Inc. vs The Underwriters Insurance Co., Inc., No. L-27863, August 29, 1969.md",
+      "src_size": 16198
+    },
+    {
+      "file": "Mateo vs Lagua., No. L-26270, October 30, 1969.md",
+      "src_size": 46255
+    },
+    {
+      "file": "Miguel vs Court of Appeals, No. L-20274, October 30, 1969.md",
+      "src_size": 50035
+    },
+    {
+      "file": "Mobil Oil Philippines, Inc. vs, Diocares, No. L-26371, September 30, 1969.md",
+      "src_size": 15784
+    },
+    {
+      "file": "National Marketing Corp. vs Tecson, No. L-29131, August 27, 1969.md",
+      "src_size": 12692
+    },
+    {
+      "file": "Neria vs Vivo, Nos. L-26611-12, September 30, 1969.md",
+      "src_size": 23048
+    },
+    {
+      "file": "No. L-24791, August 29, 1969.md",
+      "src_size": 11394
+    },
+    {
+      "file": "Normandy vs Duque, No. L-25407, August 29, 1969.md",
+      "src_size": 15954
+    },
+    {
+      "file": "Parreño vs Ganancial, No. L-22245, October 30, 1969.md",
+      "src_size": 11351
+    },
+    {
+      "file": "People vs Aglibut, No. L-23694, October 30, 1969.md",
+      "src_size": 33316
+    },
+    {
+      "file": "People vs Ali, No. L-18519, October 30, 1969.md",
+      "src_size": 10043
+    },
+    {
+      "file": "People vs Barba, Nos. L-27615-16, September 30, 1969.md",
+      "src_size": 20003
+    },
+    {
+      "file": "People vs Gensola, No. L-24491, September 30, 1969.md",
+      "src_size": 26088
+    },
+    {
+      "file": "People vs Hamtig, No. L-27431, Angust 22, 1969.md",
+      "src_size": 23445
+    },
+    {
+      "file": "People vs Hanasan, No. L 25989, September 30, 1969.md",
+      "src_size": 28151
+    },
+    {
+      "file": "People vs Lagrimas, No. L-25355, August 28, 1969.md",
+      "src_size": 18650
+    },
+    {
+      "file": "People vs Pagaduan, No. L-26948, August 25, 1969.md",
+      "src_size": 16019
+    },
+    {
+      "file": "People vs Resuello, No. L-30165, August 22, 1969.md",
+      "src_size": 8916
+    },
+    {
+      "file": "People vs Serafica, Nos. L-29092-93, August 28, 1969.md",
+      "src_size": 14713
+    },
+    {
+      "file": "People vs Solacito, No. L-29209, August 25, 1969.md",
+      "src_size": 21015
+    },
+    {
+      "file": "People vs Valencia, No. L-29396, August 29, 1969.md",
+      "src_size": 24905
+    },
+    {
+      "file": "Philippine National Bank vs Palad, No. L-23032, September 30, 1969.md",
+      "src_size": 4850
+    },
+    {
+      "file": "Philippine National Bank vs Pineda, No. L 28505, August 29, 1969.md",
+      "src_size": 9230
+    },
+    {
+      "file": "Philippine National Bank vs Pineda, No. L-29748, August 29, 1969.md",
+      "src_size": 17903
+    },
+    {
+      "file": "Philippine National Bank vs Sta. Maria, No. L-24765, August 29, 1969.md",
+      "src_size": 22499
+    },
+    {
+      "file": "Philippine National Railways vs Del Valle, No. L-29381, September 30, 1969.md",
+      "src_size": 19025
+    },
+    {
+      "file": "Providence Washington Insurance Co. vs Republic, No. L-26386, September 30, 1969.md",
+      "src_size": 38514
+    },
+    {
+      "file": "Ramirez Telephone Corp. vs Bank of America, No. L-22614, August 29, 1969.md",
+      "src_size": 17971
+    },
+    {
+      "file": "Republic vs Marcos, No. L-29675, September 30, 1969.md",
+      "src_size": 30035
+    },
+    {
+      "file": "Republic vs Uy Piek Tuy, No. L-27680, August 27, 1969.md",
+      "src_size": 48200
+    },
+    {
+      "file": "Reyes vs Manas, No. L-27755, October 4, 1969.md",
+      "src_size": 24257
+    },
+    {
+      "file": "Saludares vs Martinez, No. L-27335, October 28, 1969.md",
+      "src_size": 13806
+    },
+    {
+      "file": "Sing vs Republic, No. L-30149, August 28, 1969.md",
+      "src_size": 4314
+    },
+    {
+      "file": "Tan Cohon vs Election Registrar, No. L-29166, August 29, 1969.md",
+      "src_size": 22353
+    },
+    {
+      "file": "Tiangco vs Hercules Iron Mines Development, Inc., No. L-22662, October 30, 1969.md",
+      "src_size": 15291
+    },
+    {
+      "file": "Vda. de Quirino vs Palarca,, No. L-28269, August 15, 1969.md",
+      "src_size": 18521
+    },
+    {
+      "file": "Vencilao vs Camarenta, No. L-24308, September 30, 1969.md",
+      "src_size": 24125
+    },
+    {
+      "file": "Villalon vs Arrieta., No. L-29177, September 30, 1969.md",
+      "src_size": 41042
+    },
+    {
+      "file": "Villanueva vs Portigo, No. L-27002, August 27, 1969.md",
+      "src_size": 19301
+    },
+    {
+      "file": "Vivo vs Puno, No. L-25180, August 29, 1969.md",
+      "src_size": 11796
+    }
+  ],
+  "present_files": [
+    {
+      "file": "Alhambra Industries, Inc. vs Court of Industrial Relations, No. L-22219, August 28, 1969.md",
+      "src_size": 16209,
+      "dst_size": 3321
+    },
+    {
+      "file": "Anduiza vs Dy-Kia, No. L-23757, August 29, 1969.md",
+      "src_size": 89664,
+      "dst_size": 4535
+    },
+    {
+      "file": "Blanco vs Workmen's Compensation Commission, No. L-21385-86, August 22, 1969.md",
+      "src_size": 13988,
+      "dst_size": 2618
+    },
+    {
+      "file": "Blue Bar Workers' Union vs Lakas ng Manggagawang Makabayan, No. L-29743, September 30, 1969.md",
+      "src_size": 8967,
+      "dst_size": 2364
+    },
+    {
+      "file": "City of Bacolod vs San Miguel Brewery, Inc., No. L-25134, October 30, 1969.md",
+      "src_size": 90687,
+      "dst_size": 2927
+    },
+    {
+      "file": "Comia vs Nicolas, No. L-26079, September 30, 1969.md",
+      "src_size": 29375,
+      "dst_size": 3365
+    },
+    {
+      "file": "Del Rosario, Jr. vs Vda. de Mercado, No. L-25710, August 28, 1969.md",
+      "src_size": 17761,
+      "dst_size": 3158
+    },
+    {
+      "file": "Deluao vs Casteel, No. L-21906, August 29, 1969.md",
+      "src_size": 49853,
+      "dst_size": 3149
+    },
+    {
+      "file": "Esquillo vs, Subido, No. L-30341, August 22, 1969.md",
+      "src_size": 8867,
+      "dst_size": 2455
+    },
+    {
+      "file": "F. Sare Enterprises vs Commissioner of Customs, No. L-22263, August 28, 1969.md",
+      "src_size": 11946,
+      "dst_size": 2830
+    },
+    {
+      "file": "Galsim vs Philippine National Bank, No. L-23921, August 29, 1969.md",
+      "src_size": 25412,
+      "dst_size": 2880
+    },
+    {
+      "file": "Guardiano vs, Encarnacion, No, L-23396, August 29, 1969.md",
+      "src_size": 26623,
+      "dst_size": 2974
+    },
+    {
+      "file": "Layno vs 1 & I Equipment & Service Co., No. L-23849, September 30, 1969.md",
+      "src_size": 12581,
+      "dst_size": 2687
+    },
+    {
+      "file": "Luque vs Kayanan, No, L-26826, August 29, 1969.md",
+      "src_size": 45917,
+      "dst_size": 3757
+    },
+    {
+      "file": "Municipality of Pasacao vs Provincial Board of Camarines Sur, No. L-21788, August 28, 1969.md",
+      "src_size": 10042,
+      "dst_size": 3289
+    },
+    {
+      "file": "National Marketing Corp. vs Area, No. L-25743, September 30, 1969.md",
+      "src_size": 21725,
+      "dst_size": 3646
+    },
+    {
+      "file": "Oh Hek How vs Republic, No. L-27429, August 27, 1969.md",
+      "src_size": 15657,
+      "dst_size": 3547
+    },
+    {
+      "file": "Paredes vs Gopengco, No. L-23710, September 30, 1969.md",
+      "src_size": 35059,
+      "dst_size": 3668
+    },
+    {
+      "file": "People vs Bulawin, No, L-30069, September 30, 1969.md",
+      "src_size": 22343,
+      "dst_size": 2563
+    },
+    {
+      "file": "People vs Gallora, No. L-21740, October 30, 1969.md",
+      "src_size": 15297,
+      "dst_size": 3450
+    },
+    {
+      "file": "People vs Manuel, Nos. L-23786 & L-23787, August 29, 1969.md",
+      "src_size": 22033,
+      "dst_size": 3090
+    },
+    {
+      "file": "Phil. Commercial & Industrial Bank vs ELRO Development Corporation, No. L-30830, August 22, 1969.md",
+      "src_size": 10717,
+      "dst_size": 2342
+    },
+    {
+      "file": "Philippine Trust Co. vs Policarpio, No. L-22685, August 25, 1969.md",
+      "src_size": 28494,
+      "dst_size": 3276
+    },
+    {
+      "file": "Rodriguez vs Court of Appeals, No. L-29264, August 29, 1969.md",
+      "src_size": 39806,
+      "dst_size": 3940
+    },
+    {
+      "file": "Velasquez vs Barrera, Adm. Case No. 415, August 29. 1969.md",
+      "src_size": 35562,
+      "dst_size": 3663
+    }
+  ],
+  "order_analysis": [
+    {
+      "index": 1,
+      "file": "Alhambra Industries, Inc. vs Court of Industrial Relations, No. L-22219, August 28, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 2,
+      "file": "Anduiza vs Dy-Kia, No. L-23757, August 29, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 3,
+      "file": "Asturias Sugar Central, Inc. vs Commissioner of Customs, No. L-19337, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 4,
+      "file": "Aves vs Joson, No. L-29922, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 5,
+      "file": "Balbarona vs Santos, Adm. Case No. 652, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 6,
+      "file": "Beltran vs People's Homesite and Housing Corporation, No. L-25138, August 28, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 7,
+      "file": "Blanco vs Workmen's Compensation Commission, No. L-21385-86, August 22, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 8,
+      "file": "Blue Bar Workers' Union vs Lakas ng Manggagawang Makabayan, No. L-29743, September 30, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 9,
+      "file": "Board of Liquidators vs Ricma Trading Corp., No. L-24318, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 10,
+      "file": "Bureau of Telecommunications vs Public Service Commission, No. L-27412, October 28, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 11,
+      "file": "Cabungcal vs Cordova, No. L-24794, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 12,
+      "file": "Chan Chin vs Local Civil Registrar of Manila, No. L-27159, September 17, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 13,
+      "file": "City of Bacolod vs San Miguel Brewery, Inc., No. L-25134, October 30, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 14,
+      "file": "Comia vs Nicolas, No. L-26079, September 30, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 15,
+      "file": "Commissioner of Internal Revenue vs Ilagan Electric & Ice Plant, Inc., No. L-23081, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 16,
+      "file": "Conde vs Superable. Jr., Adm, Case No. 812, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 17,
+      "file": "Cornelio vs Court of Appeals, No. L-24334, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 18,
+      "file": "De Leon vs Pampanga Sugar Development Co., Inc., No, L-26844, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 19,
+      "file": "Del Rosario, Jr. vs Vda. de Mercado, No. L-25710, August 28, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 20,
+      "file": "Deluao vs Casteel, No. L-21906, August 29, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 21,
+      "file": "Diamalon vs Quintillan, Adm. Case No. 116, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 22,
+      "file": "Dumlao vs, Diaz, No. L-24476, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 23,
+      "file": "Enciso vs Remo, No. L-23670, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 24,
+      "file": "Enrile vs Court of Appeals, No. L-27549, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 25,
+      "file": "Esquillo vs, Subido, No. L-30341, August 22, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 26,
+      "file": "F. Sare Enterprises vs Commissioner of Customs, No. L-22263, August 28, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 27,
+      "file": "Fernandez Hermanos, Inc, vs Commissioner of Internal Revenue, No. L-21551, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 28,
+      "file": "Formento vs, Court of Appeals, No. L-26442, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 29,
+      "file": "Galeno vs Ticao, No. L-22355, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 30,
+      "file": "Galeno vs, Ticao, No. L-22355, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 31,
+      "file": "Galsim vs Philippine National Bank, No. L-23921, August 29, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 32,
+      "file": "Guardiano vs, Encarnacion, No, L-23396, August 29, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 33,
+      "file": "Guerrero vs Court of Appeals, No. L-22366, October 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 34,
+      "file": "Heald Lumber Co. vs Tabios, No. L-23123, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 35,
+      "file": "Insular Lumber Co. vs Court of Appeals, No. L-23857, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 36,
+      "file": "Lanzar vs Guerrero, Sr., No. L-21581, August 28, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 37,
+      "file": "Layno vs 1 & I Equipment & Service Co., No. L-23849, September 30, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 38,
+      "file": "Luque vs Kayanan, No, L-26826, August 29, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 39,
+      "file": "Luzon Metal and Plumbing Works Co., Inc. vs The Underwriters Insurance Co., Inc., No. L-27863, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 40,
+      "file": "Mateo vs Lagua., No. L-26270, October 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 41,
+      "file": "Miguel vs Court of Appeals, No. L-20274, October 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 42,
+      "file": "Mobil Oil Philippines, Inc. vs, Diocares, No. L-26371, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 43,
+      "file": "Municipality of Pasacao vs Provincial Board of Camarines Sur, No. L-21788, August 28, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 44,
+      "file": "National Marketing Corp. vs Area, No. L-25743, September 30, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 45,
+      "file": "National Marketing Corp. vs Tecson, No. L-29131, August 27, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 46,
+      "file": "Neria vs Vivo, Nos. L-26611-12, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 47,
+      "file": "No. L-24791, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 48,
+      "file": "Normandy vs Duque, No. L-25407, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 49,
+      "file": "Oh Hek How vs Republic, No. L-27429, August 27, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 50,
+      "file": "Paredes vs Gopengco, No. L-23710, September 30, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 51,
+      "file": "Parreño vs Ganancial, No. L-22245, October 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 52,
+      "file": "People vs Aglibut, No. L-23694, October 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 53,
+      "file": "People vs Ali, No. L-18519, October 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 54,
+      "file": "People vs Barba, Nos. L-27615-16, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 55,
+      "file": "People vs Bulawin, No, L-30069, September 30, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 56,
+      "file": "People vs Gallora, No. L-21740, October 30, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 57,
+      "file": "People vs Gensola, No. L-24491, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 58,
+      "file": "People vs Hamtig, No. L-27431, Angust 22, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 59,
+      "file": "People vs Hanasan, No. L 25989, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 60,
+      "file": "People vs Lagrimas, No. L-25355, August 28, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 61,
+      "file": "People vs Manuel, Nos. L-23786 & L-23787, August 29, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 62,
+      "file": "People vs Pagaduan, No. L-26948, August 25, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 63,
+      "file": "People vs Resuello, No. L-30165, August 22, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 64,
+      "file": "People vs Serafica, Nos. L-29092-93, August 28, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 65,
+      "file": "People vs Solacito, No. L-29209, August 25, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 66,
+      "file": "People vs Valencia, No. L-29396, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 67,
+      "file": "Phil. Commercial & Industrial Bank vs ELRO Development Corporation, No. L-30830, August 22, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 68,
+      "file": "Philippine National Bank vs Palad, No. L-23032, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 69,
+      "file": "Philippine National Bank vs Pineda, No. L 28505, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 70,
+      "file": "Philippine National Bank vs Pineda, No. L-29748, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 71,
+      "file": "Philippine National Bank vs Sta. Maria, No. L-24765, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 72,
+      "file": "Philippine National Railways vs Del Valle, No. L-29381, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 73,
+      "file": "Philippine Trust Co. vs Policarpio, No. L-22685, August 25, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 74,
+      "file": "Providence Washington Insurance Co. vs Republic, No. L-26386, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 75,
+      "file": "Ramirez Telephone Corp. vs Bank of America, No. L-22614, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 76,
+      "file": "Republic vs Marcos, No. L-29675, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 77,
+      "file": "Republic vs Uy Piek Tuy, No. L-27680, August 27, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 78,
+      "file": "Reyes vs Manas, No. L-27755, October 4, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 79,
+      "file": "Rodriguez vs Court of Appeals, No. L-29264, August 29, 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 80,
+      "file": "Saludares vs Martinez, No. L-27335, October 28, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 81,
+      "file": "Sing vs Republic, No. L-30149, August 28, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 82,
+      "file": "Tan Cohon vs Election Registrar, No. L-29166, August 29, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 83,
+      "file": "Tiangco vs Hercules Iron Mines Development, Inc., No. L-22662, October 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 84,
+      "file": "Vda. de Quirino vs Palarca,, No. L-28269, August 15, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 85,
+      "file": "Velasquez vs Barrera, Adm. Case No. 415, August 29. 1969.md",
+      "status": "OK"
+    },
+    {
+      "index": 86,
+      "file": "Vencilao vs Camarenta, No. L-24308, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 87,
+      "file": "Villalon vs Arrieta., No. L-29177, September 30, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 88,
+      "file": "Villanueva vs Portigo, No. L-27002, August 27, 1969.md",
+      "status": "MISSING"
+    },
+    {
+      "index": 89,
+      "file": "Vivo vs Puno, No. L-25180, August 29, 1969.md",
+      "status": "MISSING"
+    }
+  ]
+}

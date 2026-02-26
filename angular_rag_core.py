@@ -211,8 +211,17 @@ def safe_name_from_stem(stem: str) -> str:
 # ═══════════════════════════════════════════════════════════════
 
 def compute_content_hash(content: str) -> str:
-    """SHA-256 (first 16 hex chars) of Markdown content — used for change detection."""
-    return hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()[:16]
+    """SHA-256 (first 32 hex chars = 128 bits) of Markdown content.
+
+    128-bit space gives collision probability ~1-in-10^38 for 40 files —
+    astronomically safe while still being compact in the JSON log.
+    Extended from 16 to 32 hex chars (2026-02-26) for improved safety
+    at scale when source count grows beyond 40.
+    Backward-compat: old 16-char hashes stored in logs will no longer match
+    the new 32-char hashes and will be treated as 'update' on first run
+    after upgrade — a one-time re-upload of all sources.
+    """
+    return hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()[:32]
 
 
 def load_upload_log(log_path: str) -> dict:
@@ -233,14 +242,25 @@ def check_upload_status_loaded(
     log: dict,
 ) -> tuple[str, str | None]:
     """Like check_upload_status but operates on a pre-loaded log dict.
-    Use this in batch paths to avoid reading the log file N times."""
+    Use this in batch paths to avoid reading the log file N times.
+
+    Key invariant (research-derived):
+      If content_hash matches, the remote source is identical to the local file
+      regardless of what source_id is stored (including 'batch-unknown').
+      Returning 'skip' in that case eliminates a spurious live-title-match API
+      call that would otherwise fire every run for batch-uploaded sources.
+    """
     entry = log.get(os.path.basename(md_path))
     if not entry:
         return "new", None
     current_hash = compute_content_hash(content)
     stored_hash  = entry.get("content_hash")
+    # Hash match → content is identical → always skip, even if source_id is
+    # 'batch-unknown'. The remote content is guaranteed unchanged; no API call needed.
     if stored_hash and stored_hash == current_hash:
         return "skip", None
+    # Hash mismatch → content changed. Only provide the old source_id for
+    # targeted delete if it's a real (non-stale) ID.
     old_sid   = entry.get("source_id")
     stale_sid = old_sid if old_sid not in (None, *_STALE_SOURCE_IDS) else None
     return "update", stale_sid
@@ -289,21 +309,30 @@ def record_upload(
     content: str = "",
     _log_cache: dict | None = None,
 ) -> None:
-    """Record a successful upload in the log, with content hash for future dedup."""
+    """Record a successful upload in the log, with content hash for future dedup.
+
+    Uses atomic temp-file + os.replace() write to prevent JSON corruption if
+    the process crashes mid-write (research pattern: 'atomic file update').
+    """
     try:
         # Use caller-supplied cache dict if provided (avoids extra disk read)
         log: dict = _log_cache if _log_cache is not None else load_upload_log(upload_log_path)
-        log[os.path.basename(md_path)] = {
-            "source_id":         source_id,
-            "uploaded_at":       time.time(),
-            "md_path":           md_path,
-            "content_hash":      compute_content_hash(content) if content else "",
-            "format_version":    UPLOAD_LOG_FORMAT_VERSION,
+        key = os.path.basename(md_path)
+        entry = {
+            "source_id":      source_id,
+            "uploaded_at":    time.time(),
+            "md_path":        md_path,
+            "content_hash":   compute_content_hash(content) if content else "",
+            "format_version": UPLOAD_LOG_FORMAT_VERSION,
         }
+        log[key] = entry
         if _log_cache is not None:
-            _log_cache[os.path.basename(md_path)] = log[os.path.basename(md_path)]
-        with open(upload_log_path, "w", encoding="utf-8") as fh:
+            _log_cache[key] = entry
+        # Atomic write: write to .tmp then os.replace() — crash-safe
+        tmp_path = upload_log_path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as fh:
             json.dump(log, fh, indent=2)
+        os.replace(tmp_path, upload_log_path)
     except Exception:
         pass
 
@@ -315,6 +344,8 @@ def record_upload(
 def discover_source_files(
     project_root: str,
     include_specs: bool = False,
+    allowed_exts: set[str] | None = None,
+    explicit_files: set[str] | None = None,
 ) -> list[SourceFile]:
     """Walk src/ inside the Angular project and collect all source files."""
     src_root = os.path.join(project_root, "src")
@@ -334,9 +365,12 @@ def discover_source_files(
             rel_path = os.path.relpath(abs_path, src_root).replace("\\", "/")
             ext      = Path(fname).suffix.lower()
 
-            if ext not in SOURCE_EXTENSIONS:
+            _exts = allowed_exts if allowed_exts is not None else SOURCE_EXTENSIONS
+            if ext not in _exts:
                 continue
-            if any(abs_path.endswith(ex) for ex in EXCLUDE_EXTENSIONS):
+            
+            # If a custom allowed_exts explicitly adds an extension that is normally excluded, let it through.
+            if ext not in _exts and any(abs_path.endswith(ex) for ex in EXCLUDE_EXTENSIONS):
                 continue
 
             is_spec = fname.endswith(".spec.ts")
@@ -362,6 +396,34 @@ def discover_source_files(
                 size_bytes=stat.st_size,
                 mtime=stat.st_mtime,
             ))
+
+    # Append any explicitly listed files (e.g., config files mapped out from the root)
+    if explicit_files:
+        _exts = allowed_exts if allowed_exts is not None else SOURCE_EXTENSIONS
+        for fp in explicit_files:
+            if not os.path.isfile(fp):
+                continue
+            fname = os.path.basename(fp)
+            ext = Path(fname).suffix.lower()
+            if ext not in _exts:
+                if any(fp.endswith(ex) for ex in EXCLUDE_EXTENSIONS):
+                    continue
+            try:
+                rel_path = os.path.relpath(fp, project_root).replace("\\", "/")
+            except ValueError:
+                rel_path = fname
+            stat = os.stat(fp)
+            abs_path = os.path.abspath(fp)
+            # Make sure we don't duplicate files found by os.walk in src_root
+            if not any(f.abs_path == abs_path for f in results):
+                results.append(SourceFile(
+                    abs_path=abs_path,
+                    rel_path=rel_path,
+                    extension=ext,
+                    is_spec=fname.endswith(".spec.ts"),
+                    size_bytes=stat.st_size,
+                    mtime=stat.st_mtime,
+                ))
 
     results.sort(key=lambda f: f.rel_path)
     return results
@@ -484,13 +546,16 @@ def build_markdown(bundle: SourceBundle, project_name: str) -> str:
 def build_stem_map(
     project_root: str,
     include_specs: bool = False,
+    allowed_exts: set[str] | None = None,
+    explicit_files: set[str] | None = None,
 ) -> dict[str, list[SourceFile]]:
     """Build a stem→files mapping from all discovered source files.
 
     Used by the watcher to cache bundle membership at startup.
     Subsequent per-event lookups become O(1) dict access instead of O(n) os.walk.
     """
-    files = discover_source_files(project_root, include_specs=include_specs)
+    files = discover_source_files(
+        project_root, include_specs=include_specs, allowed_exts=allowed_exts, explicit_files=explicit_files)
     stem_map: dict[str, list[SourceFile]] = {}
     for f in files:
         stem = component_stem(f.rel_path)
@@ -529,6 +594,8 @@ def build_bundle_from_stem_map(
 def build_bundle_for_file(
     changed_abs: str,
     project_root: str,
+    allowed_exts: set[str] | None = None,
+    explicit_files: set[str] | None = None,
 ) -> SourceBundle | None:
     """Discover the bundle for a single changed file via os.walk (slow path).
 
@@ -551,7 +618,8 @@ def build_bundle_for_file(
         )]
         for fname in fnames:
             ext = Path(fname).suffix.lower()
-            if ext not in SOURCE_EXTENSIONS or fname.endswith(".spec.ts"):
+            _exts = allowed_exts if allowed_exts is not None else SOURCE_EXTENSIONS
+            if ext not in _exts or fname.endswith(".spec.ts"):
                 continue
             abs_p = os.path.join(dp, fname)
             rel_p = os.path.relpath(abs_p, src_root).replace("\\", "/")
@@ -567,6 +635,27 @@ def build_bundle_for_file(
                     size_bytes=st.st_size,
                     mtime=st.st_mtime,
                 ))
+
+    # Also check if it's an explicit file bundle
+    if not matched:
+        # We don't have explicit_files passed down all the way here, but we can do a direct check
+        # if the change_abs perfectly equals the file, or if the changed_abs maps to bundle_stem
+        try:
+            rel_changed_from_root = os.path.relpath(changed_abs, project_root).replace("\\", "/")
+        except ValueError:
+            rel_changed_from_root = changed_abs.replace("\\", "/")
+
+        if os.path.isfile(changed_abs) and component_stem(rel_changed_from_root) == bundle_stem:
+            st = os.stat(changed_abs)
+            ext = Path(changed_abs).suffix.lower()
+            matched.append(SourceFile(
+                abs_path=changed_abs,
+                rel_path=rel_changed_from_root,
+                extension=ext,
+                is_spec=False,
+                size_bytes=st.st_size,
+                mtime=st.st_mtime,
+            ))
 
     if not matched:
         return None

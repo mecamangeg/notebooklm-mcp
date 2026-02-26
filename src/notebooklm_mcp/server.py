@@ -2676,6 +2676,8 @@ def notebook_digest_multi(
     max_retries: int = 3,
     delay: float = 1.0,
     post_add_delay: float = 3.0,
+    output_suffix: str = "-case-digest.md",
+    validator: Any = None,
 ) -> dict[str, Any]:
     """Distribute files across MULTIPLE notebooks for maximum parallel throughput.
 
@@ -2708,6 +2710,11 @@ def notebook_digest_multi(
             NotebookLM needs time to index a source before queries can use it.
             With 14+ concurrent notebooks, the server-side processing queue
             saturates quickly — this delay prevents "No answer returned" failures.
+        output_suffix: Filename suffix for output files (default: "-case-digest.md").
+            For syllabi generation, use "-generated-syllabi.md".
+        validator: Optional callable(answer_text) -> bool to validate the AI response.
+            If None, uses the default digest validator (CAPTION/FACTS/ISSUE/RULING markers).
+            For syllabi, pass a function that checks for semicolons and em-dashes.
     """
     import math
     import os
@@ -2742,24 +2749,38 @@ def notebook_digest_multi(
                 "notebook_index": i,
             })
 
-    def _is_digest_valid(filepath):
-        """Check if a digest file is complete and well-formed."""
+    def _is_output_valid(filepath):
+        """Check if an output file is complete and well-formed.
+
+        Uses the custom validator if provided, otherwise falls back to
+        the default digest validator (CAPTION/FACTS/ISSUE/RULING markers).
+        """
         try:
             if not os.path.exists(filepath):
                 return False
             size = os.path.getsize(filepath)
-            if size < 500:  # Minimum viable digest is ~500 bytes
+            if size < 300:  # Minimum viable output
                 return False
             with open(filepath, "r", encoding="utf-8") as f:
                 content = f.read()
-            # Must contain at least 2 of these structural markers
-            markers = 0
-            for marker in ["CAPTION", "FACTS", "ISSUE", "RULING"]:
-                if marker in content.upper():
-                    markers += 1
-            return markers >= 2
+
+            if validator is not None:
+                # Custom validator: check the content (excluding frontmatter)
+                body = content
+                if body.startswith("---"):
+                    end_fm = body.find("---", 3)
+                    if end_fm > 0:
+                        body = body[end_fm + 3:].strip()
+                return validator(body) if body else False
+            else:
+                # Default digest validation
+                markers = 0
+                for marker in ["CAPTION", "FACTS", "ISSUE", "RULING"]:
+                    if marker in content.upper():
+                        markers += 1
+                return markers >= 2
         except Exception:
-            logger.debug("_is_digest_valid failed for %s", filepath, exc_info=True)
+            logger.debug("_is_output_valid failed for %s", filepath, exc_info=True)
             return False
 
     # ── Shared progress tracking (thread-safe) ──
@@ -2806,10 +2827,10 @@ def notebook_digest_multi(
                 c if c.isalnum() or c in " .-_()," else "_"
                 for c in title
             ).strip() or f"digest_{nb_idx}"
-            output_path = os.path.join(output_dir, f"{safe_title}-case-digest.md")
+            output_path = os.path.join(output_dir, f"{safe_title}{output_suffix}")
 
             # Resume: skip only if digest is VALID (content-checked, not just size)
-            if _is_digest_valid(output_path):
+            if _is_output_valid(output_path):
                 chunk_results.append({
                     "title": title, "path": path, "output_path": output_path,
                     "status": "skipped", "output_size": os.path.getsize(output_path),
@@ -3025,18 +3046,26 @@ def notebook_digest_multi(
                     continue
 
                 # ── Validate answer before saving ──
-                markers_found = sum(
-                    1 for m in ["CAPTION", "FACTS", "ISSUE", "RULING"]
-                    if m in answer.upper()
-                )
-                if markers_found < 2 or len(answer) < 300:
+                if validator is not None:
+                    # Custom validator provided (e.g., syllabi)
+                    is_valid = validator(answer)
+                    validation_detail = "custom validator"
+                else:
+                    # Default digest validation: CAPTION/FACTS/ISSUE/RULING markers
+                    markers_found = sum(
+                        1 for m in ["CAPTION", "FACTS", "ISSUE", "RULING"]
+                        if m in answer.upper()
+                    )
+                    is_valid = markers_found >= 2 and len(answer) >= 300
+                    validation_detail = f"{markers_found}/4 markers, {len(answer)} chars"
+                if not is_valid:
                     with _progress_lock:
                         _progress["done"] += 1
                         _progress["failed"] += 1
-                    _log_progress(f"NB{nb_idx}: ❌ {_progress['done']}/{n_files} {item['title'][:40]} — validation failed ({markers_found}/4 markers)")
+                    _log_progress(f"NB{nb_idx}: ❌ {_progress['done']}/{n_files} {item['title'][:40]} — validation failed ({validation_detail})")
                     chunk_results.append({
                         **item, "status": "failed",
-                        "error": f"Response failed validation ({markers_found}/4 markers, {len(answer)} chars)",
+                        "error": f"Response failed validation ({validation_detail})",
                     })
                     continue
 

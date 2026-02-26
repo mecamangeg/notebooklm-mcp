@@ -443,7 +443,11 @@ class _BundleCache:
     def build(self) -> None:
         """(Re)build the stem map from disk. Threadsafe."""
         t0 = time.perf_counter()
-        stem_map = build_stem_map(self._project_root)
+        stem_map = build_stem_map(
+            self._project_root, 
+            allowed_exts=_args_ref.allowed_exts if _args_ref else None,
+            explicit_files=_args_ref.watch_files_abs if _args_ref and hasattr(_args_ref, "watch_files_abs") else None,
+        )
         with self._lock:
             self._stem_map = stem_map
             self._built = True
@@ -470,7 +474,12 @@ class _BundleCache:
             bundle = build_bundle_from_stem_map(changed_abs, self._project_root, self._stem_map)
         if bundle is None:
             # Fallback: new file not yet in cache — use slow path then rebuild
-            bundle = build_bundle_for_file(changed_abs, self._project_root)
+            bundle = build_bundle_for_file(
+                changed_abs, 
+                self._project_root, 
+                allowed_exts=_args_ref.allowed_exts if _args_ref else None,
+                explicit_files=_args_ref.watch_files_abs if _args_ref and hasattr(_args_ref, "watch_files_abs") else None,
+            )
             if bundle:
                 self.invalidate()  # rebuild so next event is fast again
         return bundle
@@ -664,10 +673,17 @@ def _debounce_enqueue(abs_path: str, kind: str):
 
 
 def _is_watched(abs_path: str) -> bool:
+    abs_path = abs_path.replace("\\", "/")
+    
+    # ── Check specific watch-files first ──
+    if _args_ref and hasattr(_args_ref, "watch_files_abs"):
+        if abs_path in _args_ref.watch_files_abs:
+            return True
+
     ext = Path(abs_path).suffix.lower()
-    return (ext in SOURCE_EXTS
+    return (ext in _args_ref.allowed_exts
             and not abs_path.endswith(".spec.ts")
-            and not _EXCLUDE_RE.search(abs_path.replace("\\", "/")))
+            and not _EXCLUDE_RE.search(abs_path))
 
 
 try:
@@ -780,10 +796,17 @@ def main():
                         help="Only convert to .md — skip NotebookLM upload")
     parser.add_argument("--debounce",        type=int, default=DEBOUNCE_MS,
                         help=f"File-save debounce in ms (default: {DEBOUNCE_MS})")
+    parser.add_argument("--watch-dir",       metavar="DIR",
+                        help="Specific directory to recursively watch instead of src/ (relative to project)")
+    parser.add_argument("--watch-files",     metavar="FILES",
+                        help="Comma-separated specific files to watch (relative to project). "
+                             "e.g. firebase.json,angular.json,README.md")
     parser.add_argument("--no-toast",        action="store_true",
                         help="Disable Windows toast notifications")
     parser.add_argument("--no-startup-sync", action="store_true",
                         help="Skip startup reconciliation scan")
+    parser.add_argument("--extra-exts",      metavar="EXTS",
+                        help="Comma-separated additional extensions (e.g. .md,.json,.toml)")
     parser.add_argument("--verbose",         action="store_true",
                         help="Also print DEBUG log messages to console")
 
@@ -798,6 +821,30 @@ def main():
     if args.verbose:
         _logger.setLevel(logging.DEBUG)
 
+    # ── Parse extra extensions ──
+    allowed_exts = set(SOURCE_EXTS)
+    if args.extra_exts:
+        for ex in args.extra_exts.split(","):
+            ex = ex.strip().lower()
+            if ex:
+                if not ex.startswith("."): ex = "." + ex
+                allowed_exts.add(ex)
+    args.allowed_exts = allowed_exts
+
+    # ── Parse watch files ──
+    watch_files_abs = set()
+    watch_dirs_nonrec = set()
+    if args.watch_files:
+        for wf in args.watch_files.split(","):
+            wf = wf.strip()
+            if wf:
+                abs_wf = Path(args.project) / wf
+                watch_files_abs.add(abs_wf.as_posix())
+                watch_dirs_nonrec.add(abs_wf.parent.as_posix())
+                args.allowed_exts.add(abs_wf.suffix.lower())
+    args.watch_files_abs = watch_files_abs
+    args.watch_dirs_nonrec = watch_dirs_nonrec
+
     if args.no_toast:
         _toast.enabled = False
 
@@ -805,9 +852,14 @@ def main():
         args.convert_only = True
         log("ℹ️", "No --notebook-ids given — running in convert-only mode")
 
-    src_dir = os.path.join(args.project, "src")
+    if args.watch_dir:
+        src_dir = os.path.join(args.project, args.watch_dir)
+    else:
+        src_dir = os.path.join(args.project, "src")
+        if not os.path.isdir(src_dir):
+            src_dir = args.project  # Fallback to project root
     if not os.path.isdir(src_dir):
-        log("❌", f"Source directory not found: {src_dir}", "error")
+        log("❌", f"Watch directory not found: {src_dir}", "error")
         sys.exit(1)
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -818,6 +870,7 @@ def main():
 
     print(f"\n{'='*64}")
     print(f"  🔭  ANGULAR RAG WATCHER")
+    print(f"  Project    : {args.project}")
     print(f"  Watching   : {src_dir}")
     print(f"  Output     : {args.output_dir}")
     if args.notebook_ids:
@@ -825,6 +878,10 @@ def main():
             print(f"  Notebook   : {nb_id[:8]}...")
     else:
         print(f"  Notebook   : none (convert-only)")
+    if args.watch_files:
+        print(f"  Watch Files: {len(args.watch_files_abs)} explicit file(s)")
+    if args.extra_exts:
+        print(f"  Extra Exts : {args.extra_exts}")
     print(f"  Debounce   : {args.debounce} ms")
     print(f"  Toast      : {'disabled' if args.no_toast else _toast_backend}")
     print(f"  Venv       : own (PEP 723 inline deps via uv run)")
@@ -858,7 +915,19 @@ def main():
     # ── Start watching ─────────────────────────────────────────────
     handler  = _Handler()
     observer = Observer()
+    
+    # We only recursively watch src_dir if it's explicitly enabled (which is the default).
+    # If the user only wanted to watch files, they could potentially pass empty, but we'll always watch src_dir.
     observer.schedule(handler, src_dir, recursive=True)
+    
+    # ── Schedule non-recursive watchers for specific files ──
+    if args.watch_dirs_nonrec:
+        src_dir_posix = Path(src_dir).as_posix()
+        for d in args.watch_dirs_nonrec:
+            # Avoid duplicate scheduling if it's already inside src_dir
+            if not d.startswith(src_dir_posix):
+                observer.schedule(handler, d, recursive=False)
+                
     observer.start()
     log("🟢", f"Watching {src_dir}  (Ctrl+C to stop)")
 

@@ -1,0 +1,282 @@
+{
+  "app.config.md": {
+    "source_id": "d21b0f7e-0eba-4c6d-b0a2-3dce8291a3e5",
+    "uploaded_at": 1772076790.3610506,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\app.config.md",
+    "content_hash": "64ff458c4e37f079",
+    "format_version": 2
+  },
+  "app.config.server.md": {
+    "source_id": "c8bb138e-f1b6-48d0-8214-fb4f73a10157",
+    "uploaded_at": 1772076777.9401634,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\app.config.server.md",
+    "content_hash": "2122c9c9320f8196",
+    "format_version": 2
+  },
+  "app.md": {
+    "source_id": "a98f69e0-6116-49ae-a205-f19e13ac34c5",
+    "uploaded_at": 1772073988.9208655,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\app.md",
+    "content_hash": "be1ab40dd8ac6fc2",
+    "format_version": 2
+  },
+  "app.routes.md": {
+    "source_id": "0f1e1685-3b60-4c6c-8aa5-b7c9cd63e873",
+    "uploaded_at": 1772076784.2078397,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\app.routes.md",
+    "content_hash": "28ddb755cecad102",
+    "format_version": 2
+  },
+  "app.routes.server.md": {
+    "source_id": "7d3fbe74-4a40-4525-b23a-5928a3bb5c19",
+    "uploaded_at": 1772076803.0776527,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\app.routes.server.md",
+    "content_hash": "6e13f693af8fcb17",
+    "format_version": 2
+  },
+  "components__auth__login.md": {
+    "source_id": "703e6f9f-fa8f-4b56-8701-11bd04d931d4",
+    "uploaded_at": 1772076771.750002,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__auth__login.md",
+    "content_hash": "84d0536bd30287c5",
+    "format_version": 2
+  },
+  "components__chat__chat-area.md": {
+    "source_id": "cde69d67-37de-4dde-8780-470f77566eb4",
+    "uploaded_at": 1772073520.3728168,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__chat-area.md",
+    "content_hash": "77121af36bdf1258",
+    "format_version": 2
+  },
+  "components__chat__citation-link.md": {
+    "source_id": "8312fe8e-1abb-48ea-a41c-60d0469ff846",
+    "uploaded_at": 1772073507.4603987,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__citation-link.md",
+    "content_hash": "9fefa82f9c1a7119",
+    "format_version": 2
+  },
+  "components__chat__grounding-badge.md": {
+    "source_id": "b2124b7c-42e5-434d-a168-885203f4e002",
+    "uploaded_at": 1772073533.6330805,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__grounding-badge.md",
+    "content_hash": "04ad7b255e4f530b",
+    "format_version": 2
+  },
+  "components__chat__message-bubble.md": {
+    "source_id": "3e8986a2-868d-4f85-8b63-2158c86f7c6c",
+    "uploaded_at": 1772073546.3735657,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__message-bubble.md",
+    "content_hash": "379f33bb81da761d",
+    "format_version": 2
+  },
+  "components__chat__parsed-content.md": {
+    "source_id": "91fb8fff-073c-48c8-9f34-05372fe8e284",
+    "uploaded_at": 1772076662.8055127,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__parsed-content.md",
+    "content_hash": "a637adf73fe49bd4",
+    "format_version": 2
+  },
+  "components__chat__pipeline-debug-panel.md": {
+    "source_id": "570e0489-dbc2-4c62-986d-82e9b24dbf73",
+    "uploaded_at": 1772076714.1924028,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__pipeline-debug-panel.md",
+    "content_hash": "f8ec285dca865956",
+    "format_version": 2
+  },
+  "components__chat__thinking-indicator.md": {
+    "source_id": "9533c44b-a543-491a-a007-f9fffc12eda0",
+    "uploaded_at": 1772076708.0827107,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__thinking-indicator.md",
+    "content_hash": "a8d436cfa05a4e55",
+    "format_version": 2
+  },
+  "components__citations-panel.md": {
+    "source_id": "793f08ff-e603-4edc-9185-ac2e1c3651ee",
+    "uploaded_at": 1772076720.5342433,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__citations-panel.md",
+    "content_hash": "7a696d9682ff4930",
+    "format_version": 2
+  },
+  "components__document-viewer.md": {
+    "source_id": "61e066e6-1655-434b-8a51-d7f967d93d51",
+    "uploaded_at": 1772073527.1859381,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__document-viewer.md",
+    "content_hash": "5268f8bd6479f5cb",
+    "format_version": 2
+  },
+  "components__nav-panel.md": {
+    "source_id": "742cbcbe-6023-41f4-9608-35a6d523058f",
+    "uploaded_at": 1772076759.019782,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__nav-panel.md",
+    "content_hash": "de4086fec1121cbc",
+    "format_version": 2
+  },
+  "components__research-indicator.md": {
+    "source_id": "fd46f2e1-4155-45dd-afc4-56e375d07de2",
+    "uploaded_at": 1772076675.8386443,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__research-indicator.md",
+    "content_hash": "3cf18e0b31890ad9",
+    "format_version": 2
+  },
+  "components__ui__glass-panel.md": {
+    "source_id": "64cb062f-39ac-45ed-8c7d-5139b638f701",
+    "uploaded_at": 1772076815.4245875,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__ui__glass-panel.md",
+    "content_hash": "f1ae6fe67e0795b5",
+    "format_version": 2
+  },
+  "components__ui__template-switcher.md": {
+    "source_id": "1d9b11c0-8b89-4cb6-8d10-57603c2282be",
+    "uploaded_at": 1772076827.8878539,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__ui__template-switcher.md",
+    "content_hash": "557e35ac7030fa23",
+    "format_version": 2
+  },
+  "config__agent-engine.config.md": {
+    "source_id": "ef9dcfc8-2db0-447b-94c4-d742d1b4fcf0",
+    "uploaded_at": 1772076701.7300487,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\config__agent-engine.config.md",
+    "content_hash": "ed1a4fb6dba64109",
+    "format_version": 2
+  },
+  "environments__environment.md": {
+    "source_id": "196ee9ac-5511-4e4b-99bc-a67e53f3f6bc",
+    "uploaded_at": 1772076745.9340434,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\environments__environment.md",
+    "content_hash": "6c0eb219cba61bcd",
+    "format_version": 2
+  },
+  "environments__environment.prod.md": {
+    "source_id": "1e6192ce-59c3-47c0-ab41-b67fd9212f6d",
+    "uploaded_at": 1772076821.6083899,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\environments__environment.prod.md",
+    "content_hash": "bbc59a20013591b2",
+    "format_version": 2
+  },
+  "index.md": {
+    "source_id": "5b94528c-51a2-490a-9732-ec16c6075690",
+    "uploaded_at": 1772068919.2754164,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\index.md",
+    "content_hash": "607bd1a7df128921",
+    "format_version": 2
+  },
+  "main.md": {
+    "source_id": "62dc952a-73aa-4f4a-9106-65302675c767",
+    "uploaded_at": 1772076809.1914344,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\main.md",
+    "content_hash": "f91290faf5f9cc75",
+    "format_version": 2
+  },
+  "main.server.md": {
+    "source_id": "bc267b68-7fb4-47cd-bb3e-1af544ddca84",
+    "uploaded_at": 1772076681.9404378,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\main.server.md",
+    "content_hash": "9d52c4940e26c565",
+    "format_version": 2
+  },
+  "models__agent-engine.types.md": {
+    "source_id": "97fb3a26-ed48-4275-bfaa-119dc59afc40",
+    "uploaded_at": 1772076695.543506,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\models__agent-engine.types.md",
+    "content_hash": "96382399734e8d3b",
+    "format_version": 2
+  },
+  "models__types.md": {
+    "source_id": "955261f2-5f22-4d24-acb0-5e65520bbe49",
+    "uploaded_at": 1772076669.423607,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\models__types.md",
+    "content_hash": "eea614ead26d10a2",
+    "format_version": 2
+  },
+  "pipes__truncate-snippet.pipe.md": {
+    "source_id": "dabe5745-a53d-41ac-8292-f79d8bc8113f",
+    "uploaded_at": 1772076765.3392038,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\pipes__truncate-snippet.pipe.md",
+    "content_hash": "ee093fbe8169d51d",
+    "format_version": 2
+  },
+  "server.md": {
+    "source_id": "5d1c1bce-36bc-4a15-a6cc-69bd05b99927",
+    "uploaded_at": 1772076796.7031903,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\server.md",
+    "content_hash": "a2078935ebe90ad1",
+    "format_version": 2
+  },
+  "services__agent-engine.service.md": {
+    "source_id": "1c115884-8aff-456e-bf39-29a5fa88a31a",
+    "uploaded_at": 1772076633.5652554,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__agent-engine.service.md",
+    "content_hash": "b9a67084e41ee044",
+    "format_version": 2
+  },
+  "services__auth.service.md": {
+    "source_id": "8e664acd-529f-4512-82f1-08ed74700dcf",
+    "uploaded_at": 1772076689.3347187,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__auth.service.md",
+    "content_hash": "51dbc5f2807c67bf",
+    "format_version": 2
+  },
+  "services__chat.service.md": {
+    "source_id": "f99c0151-35b6-4c11-aa5e-54721bde7f74",
+    "uploaded_at": 1772076640.065379,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__chat.service.md",
+    "content_hash": "980b75b9c8864002",
+    "format_version": 2
+  },
+  "services__document-viewer.service.md": {
+    "source_id": "47a40319-5b6c-4e0e-ad4f-3f265bbdd348",
+    "uploaded_at": 1772076752.1745543,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__document-viewer.service.md",
+    "content_hash": "360cdf4b5eb0dc77",
+    "format_version": 2
+  },
+  "services__grounding-audit.service.md": {
+    "source_id": "3ff2ae0c-b6e2-41f7-a668-31ba18bb8391",
+    "uploaded_at": 1772073513.7668617,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__grounding-audit.service.md",
+    "content_hash": "d8508ba50120979f",
+    "format_version": 2
+  },
+  "services__session.service.md": {
+    "source_id": "e27b9f20-6a0e-40ef-ab6a-93ece447dc35",
+    "uploaded_at": 1772073540.1559322,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__session.service.md",
+    "content_hash": "adfe2ffe877b7cc1",
+    "format_version": 2
+  },
+  "services__stream.service.md": {
+    "source_id": "a38ab807-61dc-4023-b8f3-ceac83c10269",
+    "uploaded_at": 1772076649.7025971,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__stream.service.md",
+    "content_hash": "80470c84ac5f9c00",
+    "format_version": 2
+  },
+  "services__template.service.md": {
+    "source_id": "be0c78eb-9766-4b4c-b71b-0dcb3d691c74",
+    "uploaded_at": 1772076834.3002594,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__template.service.md",
+    "content_hash": "e319fb597548a091",
+    "format_version": 2
+  },
+  "styles.md": {
+    "source_id": "59be96fd-5372-49ad-8d9f-07287d54f603",
+    "uploaded_at": 1772069092.9117854,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\styles.md",
+    "content_hash": "f50ee73a799e2e52",
+    "format_version": 2
+  },
+  "utils__citation-extractor.md": {
+    "source_id": "fc0a6743-f43f-434c-a5c7-213f4b6028b1",
+    "uploaded_at": 1772076655.9217293,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\utils__citation-extractor.md",
+    "content_hash": "ad029ffea01cb898",
+    "format_version": 2
+  },
+  "utils__document-beautifier.md": {
+    "source_id": "88f31294-b00f-492e-9cf9-b99999ce7b6f",
+    "uploaded_at": 1772076729.590133,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\utils__document-beautifier.md",
+    "content_hash": "202ba5f8e17c0f38",
+    "format_version": 2
+  }
+}

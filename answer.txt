@@ -1,0 +1,84 @@
+﻿  Γ£à Auth recovery callback registered  (3 notebook(s))
+  ≡ƒì¬ Performing initial cookie refresh...
+     Γ£à Starting with fresh cookies.
+
+  ≡ƒôû Reading 40 markdown files...
+
+============================================================
+  ANGULAR RAG UPLOADER  [MULTI-NOTEBOOK BATCH ΓÇö parallel fan-out]
+  Notebooks: 3  117e47ed...  b0376e17...  493bbdb5...
+  Files    : 40 readable  (0 unreadable)
+============================================================
+
+  [117e47ed] skip=40 update=0 new=0 ΓåÆ sending 0 sources
+  [493bbdb5] skip=40 update=0 new=0 ΓåÆ sending 0 sources
+  [b0376e17] skip=40 update=0 new=0 ΓåÆ sending 0 sources
+
+============================================================
+  ≡ƒÅü BATCH UPLOAD COMPLETE  (3 notebooks in 0s)
+  Γ£à [117e47ed...] new=0 updated=0 skipped=40 failed=0
+  Γ£à [493bbdb5...] new=0 updated=0 skipped=40 failed=0
+  Γ£à [b0376e17...] new=0 updated=0 skipped=40 failed=0
+  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  TOTAL  new=0 updated=0 skipped=120 failed=0
+  Speed  : 0.0 sources/sec (across all notebooks)
+============================================================
+
+============================================================
+  NOTEBOOK QUERY  [racing 3 notebooks in parallel]
+  Notebooks: 117e47ed...  b0376e17...  493bbdb5...
+  Query    : Provide the full details of the Node.js backend grounding audit implementation a...
+============================================================
+
+  Γ£à Answer from [117e47ed...] in 48.0s
+
+The backend grounding audit and Cloud Functions implementation in the `robsky-angular` project rely on a decoupled Node.js architecture using Firebase Functions and the Vertex AI Discovery Engine API. 
+
+Here is the complete architectural breakdown of the backend logic based on the provided source files.
+
+### 1. Grounding Audit Implementation
+The grounding audit validates generated text against retrieved documents. This occurs server-side in the backend validation layer.
+
+**Source File:** `validation__check-grounding`
+The `checkGrounding` function acts as a non-blocking post-generation validation step [1, 2].
+- **Client API:** It uses `GroundedGenerationServiceClient.checkGrounding()` [1].
+- **Request Configuration:** It points to `default_grounding_config` in the configured Google Cloud region [3]. The text candidate (`answerCandidate`) is checked against an array of `facts` (the source document content), using a `citationThreshold` defined by `env.GROUNDING_THRESHOLD` (defaults to `0.6`) [2, 3].
+- **Graceful Degradation:** If the API call fails, the catch block intercepts the error and returns a `supportScore` of `-1` [4]. This fail-open design ensures that grounding check failures do not crash the primary chat pipeline [1, 4].
+
+**Source File:** `validation__byte-offset`
+A critical part of the grounding implementation is character offset conversion. The Discovery Engine API returns claims with `startPos` and `endPos` formatted as UTF-8 byte offsets [5]. JavaScript strings use UTF-16 code units [5]. 
+- To prevent offset misalignment when highlighting Filipino text containing multi-byte characters (e.g., "├▒" or smart quotes), the backend passes the API offsets through `byteOffsetToCharOffset` [5]. 
+- This utility calculates the byte length of each character (ASCII=1, Latin supplement=2, BMP=3, Supplementary=4) to accurately map the UTF-8 boundaries back to native JavaScript indices [6].
+
+### 2. Cloud Functions
+The Firebase Cloud Functions serve as the primary proxy for chat streaming and document retrieval.
+
+**Source File:** `index`
+The entry point exposes two main `onRequest` v2 HTTPS functions: `chat` and `documentContent` [7]. Both endpoints are protected by a unified `verifyAuth` middleware that decodes the Firebase ID token and strictly enforces an email whitelist (`mecamangeg@gmail.com`) [8].
+
+#### `chat` Endpoint (SSE Streaming)
+The `chat` function orchestrates Server-Sent Events (SSE) back to the Angular client [9].
+- **Heartbeat:** It maintains a `setInterval` that fires a `: heartbeat\n\n` comment every 15 seconds to prevent intermediate proxy timeouts during long research phases [9, 10].
+- **Pipeline Routing:** The endpoint acts as a router reading the `PIPELINE_VERSION` environment variable [10, 11]. 
+
+| Pipeline Version | Handler | Description |
+| :--- | :--- | :--- |
+| `v1` | `handleV1Pipeline` | Architecture A: Calls `streamQueryUnifiedEngine` (Vertex AI Search Answer API). Emits predefined phases (Searching, Analyzing, Synthesizing) [12, 13]. |
+| `v2` | `handleV2Pipeline` | Architecture C: Calls `runPipelineStreaming` (Decoupled Pipeline). Extracts conversation history from the `messages` array and supports organic function calling (`enableToolCalling`) [14, 15]. |
+
+- **Event Emission:** The handlers stream events back to the client in a rigid sequence: `phase` updates, `stream_delta` (incremental text chunks), `stream_meta` (result counts), `stream_done`, and finally `message` (the fully assembled object containing citations, badges, and grounding data) [16-18].
+
+#### `documentContent` Endpoint (Proxy)
+This function acts as a secure proxy to fetch raw HTML/PDF documents for the frontend's iframe document viewer, bypassing CORS restrictions [19, 20]. It handles two specific URI schemes:
+
+1. **GCS Storage (`gs://`)** [21]
+   - Parses the bucket name and object path [21].
+   - Validates file existence using `@google-cloud/storage` [22].
+   - Returns `.html` files as `text/html` and `.pdf` files as `application/pdf` [23].
+
+2. **Philippine SC E-Library (`elib://`)** [23]
+   - Resolves `elib://{ID}` to `https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/{ID}` [24].
+   - **Dynamic Charset Detection:** The E-Library serves Joomla-based HTML, which can cause severe `├óΓé¼"` encoding artifacts [25]. The proxy intercepts the `ArrayBuffer`, checks the `content-type` header, and if missing, peeks into the first 2KB of the response payload to parse the `<meta charset>` tag [25, 26]. It then decodes the payload accurately into UTF-8 [26].
+
+**Security Sanitization:** Before returning any HTML content to the frontend (whether from GCS or E-Library), the proxy runs `sanitizeHtml()`. This strips out all `<script>` tags and inline event handlers (e.g., `onclick`, `onload`) to prevent XSS execution inside the viewer [20].
+

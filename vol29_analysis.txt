@@ -1,0 +1,94 @@
+Source: 89, Digested: 25, Missing: 64
+
+=== MISSING (no digest) ===
+  [ 30201 bytes] Asturias Sugar Central, Inc. vs Commissioner of Customs, No. L-19337, September 30, 1969.md
+  [ 47650 bytes] Aves vs Joson, No. L-29922, August 29, 1969.md
+  [  8472 bytes] Balbarona vs Santos, Adm. Case No. 652, September 30, 1969.md
+  [ 19783 bytes] Beltran vs People's Homesite and Housing Corporation, No. L-25138, August 28, 1969.md
+  [ 48680 bytes] Board of Liquidators vs Ricma Trading Corp., No. L-24318, August 29, 1969.md
+  [ 13582 bytes] Bureau of Telecommunications vs Public Service Commission, No. L-27412, October 28, 1969.md
+  [ 22034 bytes] Cabungcal vs Cordova, No. L-24794, September 30, 1969.md
+  [ 21182 bytes] Chan Chin vs Local Civil Registrar of Manila, No. L-27159, September 17, 1969.md
+  [ 10991 bytes] Commissioner of Internal Revenue vs Ilagan Electric & Ice Plant, Inc., No. L-23081, September 30, 1969.md
+  [ 21306 bytes] Conde vs Superable. Jr., Adm, Case No. 812, September 30, 1969.md
+  [ 22421 bytes] Cornelio vs Court of Appeals, No. L-24334, September 30, 1969.md
+  [ 15409 bytes] De Leon vs Pampanga Sugar Development Co., Inc., No, L-26844, September 30, 1969.md
+  [  7382 bytes] Diamalon vs Quintillan, Adm. Case No. 116, August 29, 1969.md
+  [  7253 bytes] Dumlao vs, Diaz, No. L-24476, September 30, 1969.md
+  [ 23921 bytes] Enciso vs Remo, No. L-23670, September 30, 1969.md
+  [ 30109 bytes] Enrile vs Court of Appeals, No. L-27549, September 30, 1969.md
+  [ 47603 bytes] Fernandez Hermanos, Inc, vs Commissioner of Internal Revenue, No. L-21551, September 30, 1969.md
+  [ 27454 bytes] Formento vs, Court of Appeals, No. L-26442, August 29, 1969.md
+  [ 18659 bytes] Galeno vs Ticao, No. L-22355, September 30, 1969.md
+  [  8431 bytes] Galeno vs, Ticao, No. L-22355, September 30, 1969.md
+  [ 19185 bytes] Guerrero vs Court of Appeals, No. L-22366, October 30, 1969.md
+  [  7785 bytes] Heald Lumber Co. vs Tabios, No. L-23123, September 30, 1969.md
+  [ 35900 bytes] Insular Lumber Co. vs Court of Appeals, No. L-23857, August 29, 1969.md
+  [ 12721 bytes] Lanzar vs Guerrero, Sr., No. L-21581, August 28, 1969.md
+  [ 16198 bytes] Luzon Metal and Plumbing Works Co., Inc. vs The Underwriters Insurance Co., Inc., No. L-27863, August 29, 1969.md
+  [ 46255 bytes] Mateo vs Lagua., No. L-26270, October 30, 1969.md
+  [ 50035 bytes] Miguel vs Court of Appeals, No. L-20274, October 30, 1969.md
+  [ 15784 bytes] Mobil Oil Philippines, Inc. vs, Diocares, No. L-26371, September 30, 1969.md
+  [ 12692 bytes] National Marketing Corp. vs Tecson, No. L-29131, August 27, 1969.md
+  [ 23048 bytes] Neria vs Vivo, Nos. L-26611-12, September 30, 1969.md
+  [ 11394 bytes] No. L-24791, August 29, 1969.md
+  [ 15954 bytes] Normandy vs Duque, No. L-25407, August 29, 1969.md
+  [ 11351 bytes] Parreño vs Ganancial, No. L-22245, October 30, 1969.md
+  [ 33316 bytes] People vs Aglibut, No. L-23694, October 30, 1969.md
+  [ 10043 bytes] People vs Ali, No. L-18519, October 30, 1969.md
+  [ 20003 bytes] People vs Barba, Nos. L-27615-16, September 30, 1969.md
+  [ 26088 bytes] People vs Gensola, No. L-24491, September 30, 1969.md
+  [ 23445 bytes] People vs Hamtig, No. L-27431, Angust 22, 1969.md
+  [ 28151 bytes] People vs Hanasan, No. L 25989, September 30, 1969.md
+  [ 18650 bytes] People vs Lagrimas, No. L-25355, August 28, 1969.md
+  [ 16019 bytes] People vs Pagaduan, No. L-26948, August 25, 1969.md
+  [  8916 bytes] People vs Resuello, No. L-30165, August 22, 1969.md
+  [ 14713 bytes] People vs Serafica, Nos. L-29092-93, August 28, 1969.md
+  [ 21015 bytes] People vs Solacito, No. L-29209, August 25, 1969.md
+  [ 24905 bytes] People vs Valencia, No. L-29396, August 29, 1969.md
+  [  4850 bytes] Philippine National Bank vs Palad, No. L-23032, September 30, 1969.md
+  [  9230 bytes] Philippine National Bank vs Pineda, No. L 28505, August 29, 1969.md
+  [ 17903 bytes] Philippine National Bank vs Pineda, No. L-29748, August 29, 1969.md
+  [ 22499 bytes] Philippine National Bank vs Sta. Maria, No. L-24765, August 29, 1969.md
+  [ 19025 bytes] Philippine National Railways vs Del Valle, No. L-29381, September 30, 1969.md
+  [ 38514 bytes] Providence Washington Insurance Co. vs Republic, No. L-26386, September 30, 1969.md
+  [ 17971 bytes] Ramirez Telephone Corp. vs Bank of America, No. L-22614, August 29, 1969.md
+  [ 30035 bytes] Republic vs Marcos, No. L-29675, September 30, 1969.md
+  [ 48200 bytes] Republic vs Uy Piek Tuy, No. L-27680, August 27, 1969.md
+  [ 24257 bytes] Reyes vs Manas, No. L-27755, October 4, 1969.md
+  [ 13806 bytes] Saludares vs Martinez, No. L-27335, October 28, 1969.md
+  [  4314 bytes] Sing vs Republic, No. L-30149, August 28, 1969.md
+  [ 22353 bytes] Tan Cohon vs Election Registrar, No. L-29166, August 29, 1969.md
+  [ 15291 bytes] Tiangco vs Hercules Iron Mines Development, Inc., No. L-22662, October 30, 1969.md
+  [ 18521 bytes] Vda. de Quirino vs Palarca,, No. L-28269, August 15, 1969.md
+  [ 24125 bytes] Vencilao vs Camarenta, No. L-24308, September 30, 1969.md
+  [ 41042 bytes] Villalon vs Arrieta., No. L-29177, September 30, 1969.md
+  [ 19301 bytes] Villanueva vs Portigo, No. L-27002, August 27, 1969.md
+  [ 11796 bytes] Vivo vs Puno, No. L-25180, August 29, 1969.md
+
+=== PRESENT (have digest) ===
+  [ 16209 bytes] Alhambra Industries, Inc. vs Court of Industrial Relations, No. L-22219, August 28, 1969.md
+  [ 89664 bytes] Anduiza vs Dy-Kia, No. L-23757, August 29, 1969.md
+  [ 13988 bytes] Blanco vs Workmen's Compensation Commission, No. L-21385-86, August 22, 1969.md
+  [  8967 bytes] Blue Bar Workers' Union vs Lakas ng Manggagawang Makabayan, No. L-29743, September 30, 1969.md
+  [ 90687 bytes] City of Bacolod vs San Miguel Brewery, Inc., No. L-25134, October 30, 1969.md
+  [ 29375 bytes] Comia vs Nicolas, No. L-26079, September 30, 1969.md
+  [ 17761 bytes] Del Rosario, Jr. vs Vda. de Mercado, No. L-25710, August 28, 1969.md
+  [ 49853 bytes] Deluao vs Casteel, No. L-21906, August 29, 1969.md
+  [  8867 bytes] Esquillo vs, Subido, No. L-30341, August 22, 1969.md
+  [ 11946 bytes] F. Sare Enterprises vs Commissioner of Customs, No. L-22263, August 28, 1969.md
+  [ 25412 bytes] Galsim vs Philippine National Bank, No. L-23921, August 29, 1969.md
+  [ 26623 bytes] Guardiano vs, Encarnacion, No, L-23396, August 29, 1969.md
+  [ 12581 bytes] Layno vs 1 & I Equipment & Service Co., No. L-23849, September 30, 1969.md
+  [ 45917 bytes] Luque vs Kayanan, No, L-26826, August 29, 1969.md
+  [ 10042 bytes] Municipality of Pasacao vs Provincial Board of Camarines Sur, No. L-21788, August 28, 1969.md
+  [ 21725 bytes] National Marketing Corp. vs Area, No. L-25743, September 30, 1969.md
+  [ 15657 bytes] Oh Hek How vs Republic, No. L-27429, August 27, 1969.md
+  [ 35059 bytes] Paredes vs Gopengco, No. L-23710, September 30, 1969.md
+  [ 22343 bytes] People vs Bulawin, No, L-30069, September 30, 1969.md
+  [ 15297 bytes] People vs Gallora, No. L-21740, October 30, 1969.md
+  [ 22033 bytes] People vs Manuel, Nos. L-23786 & L-23787, August 29, 1969.md
+  [ 10717 bytes] Phil. Commercial & Industrial Bank vs ELRO Development Corporation, No. L-30830, August 22, 1969.md
+  [ 28494 bytes] Philippine Trust Co. vs Policarpio, No. L-22685, August 25, 1969.md
+  [ 39806 bytes] Rodriguez vs Court of Appeals, No. L-29264, August 29, 1969.md
+  [ 35562 bytes] Velasquez vs Barrera, Adm. Case No. 415, August 29. 1969.md

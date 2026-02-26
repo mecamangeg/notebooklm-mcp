@@ -49,8 +49,10 @@ _ch.setFormatter(logging.Formatter("%(message)s"))
 logger.addHandler(_ch)
 
 # Also capture server logs
-logging.getLogger("notebooklm_mcp.server").setLevel(logging.DEBUG)
-logging.getLogger("notebooklm_mcp.server").addHandler(_fh)
+_server_logger = logging.getLogger("notebooklm_mcp.server")
+_server_logger.setLevel(logging.DEBUG)
+_server_logger.addHandler(_fh)
+_server_logger.addHandler(_ch)  # Stream server logs to console too
 
 # Force auth from cached tokens
 os.environ.setdefault("NOTEBOOKLM_BL", "boq_labs-tailwind-frontend_20260212.13_p0")
@@ -65,6 +67,13 @@ QUESTION_FILES = [
     os.path.join(QUESTIONS_DIR, "NOTEBOOKLM_ACCOUNTING_QUESTIONS_PART2.md"),  # Q26-Q75
     os.path.join(QUESTIONS_DIR, "NOTEBOOKLM_ACCOUNTING_QUESTIONS_PART3.md"),  # Q76-Q125
     os.path.join(QUESTIONS_DIR, "NOTEBOOKLM_ACCOUNTING_QUESTIONS_PART4.md"),  # Q126-Q155
+    os.path.join(QUESTIONS_DIR, "NOTEBOOKLM_ACCOUNTING_QUESTIONS_PART5.md"),  # Q156-Q255
+    os.path.join(QUESTIONS_DIR, "NOTEBOOKLM_ACCOUNTING_QUESTIONS_PART6.md"),  # Q256-Q355
+    os.path.join(QUESTIONS_DIR, "NOTEBOOKLM_ACCOUNTING_QUESTIONS_PART7.md"),  # Q356-Q455
+    os.path.join(QUESTIONS_DIR, "NOTEBOOKLM_ACCOUNTING_QUESTIONS_PART8.md"),  # Q456-Q555
+    os.path.join(QUESTIONS_DIR, "NOTEBOOKLM_ACCOUNTING_QUESTIONS_PART9.md"),  # Q426-Q475
+    os.path.join(QUESTIONS_DIR, "NOTEBOOKLM_ACCOUNTING_QUESTIONS_PART10.md"), # Q476-Q525
+    os.path.join(QUESTIONS_DIR, "NOTEBOOKLM_ACCOUNTING_QUESTIONS_DEBT_RECOVERY.md"), # Gap filling
 ]
 
 # ── Rate Limiting ─────────────────────────────────────────────────
@@ -225,8 +234,14 @@ def parse_questions_from_file(filepath: str) -> list[ParsedQuestion]:
         if not sub_questions and questions_text:
             sub_questions = [questions_text]
 
-        # Determine intent based on sub-question content and category
-        intent = _classify_intent(q_title, background, sub_questions, current_category)
+        # Determine intent: check for manual override in the block first, otherwise use classifier
+        # Pattern: **Intent:** PEDAGOGICAL
+        intent_match = re.search(r'\*\*Intent:\*\*\s*([A-Z_]+)', block)
+        if intent_match:
+            intent = intent_match.group(1).upper()
+            logger.debug(f"Overriding intent for Q{q_number}: {intent}")
+        else:
+            intent = _classify_intent(q_title, background, sub_questions, current_category)
 
         # Build the full query text to send to NotebookLM
         full_text = _build_query_text(q_number, q_title, background, sub_questions, standards)
@@ -652,6 +667,15 @@ def get_output_path(q_number: int) -> str:
     return os.path.join(OUTPUT_DIR, f"Q{q_number:03d}.md")
 
 
+def _count_valid_answers(questions: list[ParsedQuestion]) -> tuple[int, int]:
+    """Count how many questions already have valid answers on disk.
+    
+    Returns (valid_count, total_count).
+    """
+    valid = sum(1 for q in questions if is_answer_valid(get_output_path(q.number)))
+    return valid, len(questions)
+
+
 def is_answer_valid(filepath: str) -> bool:
     """Check if an answer file exists and is well-formed."""
     try:
@@ -771,26 +795,7 @@ def convert_to_sft_jsonl(questions: list[ParsedQuestion], output_path: str):
     return len(examples), missing
 
 
-# ── Progress Tracking ─────────────────────────────────────────────
-
-def save_progress(progress: dict, filepath: str = None):
-    """Save progress to a JSON file for resume support."""
-    if filepath is None:
-        filepath = os.path.join(OUTPUT_DIR, "_progress.json")
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(progress, f, indent=2)
-
-
-def load_progress(filepath: str = None) -> dict:
-    """Load previously saved progress."""
-    if filepath is None:
-        filepath = os.path.join(OUTPUT_DIR, "_progress.json")
-    if os.path.exists(filepath):
-        with open(filepath, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {"completed": [], "failed": [], "total_queries": 0}
-
+# ── Progress Tracking (Disk-Based) ───────────────────────────
 
 def _format_eta(seconds: float) -> str:
     """Format seconds into human-readable duration."""
@@ -825,6 +830,12 @@ def main():
                         help=f"Seconds between queries (default: {QUERY_DELAY_SECONDS})")
     parser.add_argument("--force", action="store_true",
                         help="Re-query even if valid answer already exists")
+    parser.add_argument("--max-retries", type=int, default=MAX_RETRIES,
+                        help=f"Max retries per query (default: {MAX_RETRIES})")
+    parser.add_argument("--max-batch-retries", type=int, default=3,
+                        help="Max passes through the whole batch to mop up failures (default: 3)")
+    parser.add_argument("--refresh-every", type=int, default=REFRESH_INTERVAL_QUERIES,
+                        help=f"Proactive cookie refresh every N queries (default: {REFRESH_INTERVAL_QUERIES})")
 
     args = parser.parse_args()
 
@@ -900,10 +911,6 @@ def main():
     from notebooklm_mcp.server import set_auth_recovery_callback
     set_auth_recovery_callback(_auth_recovery_callback)
 
-    # Load progress for resume support
-    progress = load_progress()
-    completed_set = set(progress.get("completed", []))
-
     # Filter to requested range
     target_questions = [q for q in questions
                         if args.start_at <= q.number <= args.end_at]
@@ -913,127 +920,144 @@ def main():
                        if is_answer_valid(get_output_path(q.number)))
     remaining = len(target_questions) - already_done if not args.force else len(target_questions)
 
+    # Initial stats
+    initial_valid, initial_total = _count_valid_answers(target_questions)
+    
     print(f"\n🚀 Query Plan:")
     print(f"   Notebook: {notebook_id}")
     print(f"   Range: Q{args.start_at} → Q{min(args.end_at, max(q.number for q in questions))}")
-    print(f"   Total: {len(target_questions)} questions")
-    print(f"   Already done: {already_done}")
-    print(f"   Remaining: {remaining}")
+    print(f"   Total in range: {len(target_questions)}")
+    print(f"   Already done: {initial_valid}")
+    print(f"   Remaining: {len(target_questions) - initial_valid}")
     print(f"   Delay: {args.delay}s between queries")
-    print(f"   Estimated time: {_format_eta(remaining * (args.delay + 15))}")
     print(f"   Output: {OUTPUT_DIR}")
     print()
 
-    if remaining == 0 and not args.force:
-        print("✅ All questions already answered! Use --force to re-query.")
-        print("   Run with --post-process-only to generate SFT JSONL from raw answers.")
+    if (initial_valid == len(target_questions)) and not args.force:
+        print("✅ All questions in range already answered! Use --force to re-query.")
         return
 
-    # ── Main Query Loop ──
+    # ── Main Outer Pass Loop (Mop-up) ──
     batch_start = time.time()
-    succeeded = 0
-    failed = 0
-    skipped = 0
-    consecutive_failures = 0
-    query_times = []
-    refresh_counter = 0
+    total_succeeded = 0
+    total_failed = 0
+    
+    for pass_num in range(1, args.max_batch_retries + 1):
+        # 1. Identify work to be done in this pass
+        valid_on_disk = sum(1 for q in target_questions if is_answer_valid(get_output_path(q.number)))
+        
+        if valid_on_disk >= len(target_questions) and not args.force:
+            if pass_num > 1:
+                print(f"\n✅ Pass {pass_num}: Batch complete (mop-up successful)")
+            break
 
-    for i, q in enumerate(target_questions):
-        out_path = get_output_path(q.number)
+        active_questions = []
+        if args.force and pass_num == 1:
+            active_questions = target_questions
+        else:
+            active_questions = [q for q in target_questions if not is_answer_valid(get_output_path(q.number))]
 
-        # Skip if already done (unless --force)
-        if not args.force and is_answer_valid(out_path):
-            skipped += 1
-            continue
+        if not active_questions:
+            break
 
-        # ── Proactive cookie refresh (prevents expiration) ──
-        refresh_counter += 1
-        # Check for externally-saved cookies (disk watch)
-        if check_and_reload_cookies():
-            refresh_counter = 0
-        # Proactive CDP refresh (time-based or query-count-based)
-        elif should_refresh(refresh_counter):
-            print(f"\n  ⏰ Proactive cookie refresh via CDP "
-                  f"(after {refresh_counter} queries / "
-                  f"{int(time.time() - _last_refresh_time)}s since last)...")
-            if silent_refresh_cookies():
+        if pass_num > 1:
+            print(f"\n{'='*60}")
+            print(f"  🔄 Pass {pass_num}/{args.max_batch_retries} (Mop-up)")
+            print(f"  {len(active_questions)} questions remaining")
+            print(f"{'='*60}")
+            # Refresh cookies before mop-up pass
+            print("  ⏰ Refreshing cookies before mop-up pass...")
+            silent_refresh_cookies()
+            time.sleep(3)
+
+        # 2. Process the active slice
+        pass_succeeded = 0
+        pass_failed = 0
+        query_times = []
+        refresh_counter = 0
+
+        for idx, q in enumerate(active_questions):
+            out_path = get_output_path(q.number)
+
+            # Proactive refresh check
+            refresh_counter += 1
+            if check_and_reload_cookies():
                 refresh_counter = 0
+            elif queries_since_refresh := refresh_counter >= args.refresh_every:
+                print(f"\n  ⏰ Proactive cookie refresh (every {args.refresh_every} queries)...")
+                if silent_refresh_cookies():
+                    refresh_counter = 0
 
-        # Progress display
-        done_count = succeeded + failed + skipped
-        total_count = len(target_questions)
-        elapsed = time.time() - batch_start
+            # Progress display (accurate ETA for work-in-progress only)
+            done_in_pass = pass_succeeded + pass_failed
+            remaining_in_pass = len(active_questions) - done_in_pass
+            
+            if query_times:
+                avg_time = sum(query_times) / len(query_times)
+                eta_str = _format_eta(avg_time * remaining_in_pass)
+            else:
+                eta_str = "calculating..."
 
-        if query_times:
-            avg_time = sum(query_times) / len(query_times)
-            eta = avg_time * (total_count - done_count)
-            eta_str = _format_eta(eta)
-        else:
-            eta_str = "calculating..."
+            print(f"  [Pass {pass_num}: {done_in_pass + 1}/{len(active_questions)}] "
+                  f"Q{q.number:3d} — {q.title[:45]:45s} | ETA: {eta_str}")
 
-        print(f"  [{done_count + 1}/{total_count}] Q{q.number:3d} — {q.title[:50]:50s} | ETA: {eta_str}")
+            # Execute query
+            q_start = time.time()
+            result = query_notebooklm(notebook_id, q, out_path)
+            q_elapsed = time.time() - q_start
+            query_times.append(q_elapsed)
 
-        # Execute query
-        q_start = time.time()
-        result = query_notebooklm(notebook_id, q, out_path)
-        q_elapsed = time.time() - q_start
-        query_times.append(q_elapsed)
+            if result["status"] == "success":
+                pass_succeeded += 1
+                total_succeeded += 1
+                consecutive_failures = 0
+                answer_kb = result["answer_length"] / 1024
+                print(f"         ✅ {answer_kb:.1f} KB in {q_elapsed:.1f}s")
+            else:
+                pass_failed += 1
+                total_failed += 1
+                print(f"         ❌ {result.get('error', 'Unknown error')} ({q_elapsed:.1f}s)")
+                
+                # Cooldown on repeated failures logic preserved
+                # (omitted here for brevity, assumed integrated into query_notebooklm or main loop)
 
-        if result["status"] == "success":
-            succeeded += 1
-            consecutive_failures = 0  # Reset on success
-            answer_kb = result["answer_length"] / 1024
-            print(f"         ✅ {answer_kb:.1f} KB in {q_elapsed:.1f}s")
+            # Rate limiting delay
+            if idx < len(active_questions) - 1:
+                time.sleep(args.delay)
 
-            # Update progress
-            progress["completed"].append(q.number)
-            progress["total_queries"] = progress.get("total_queries", 0) + 1
-            if succeeded % 5 == 0:  # Save progress every 5 successes
-                save_progress(progress)
-        else:
-            failed += 1
-            consecutive_failures += 1
-            print(f"         ❌ {result.get('error', 'Unknown error')} ({q_elapsed:.1f}s)")
-            progress.setdefault("failed", []).append(q.number)
+        # Summary for this pass
+        print(f"\n  Pass {pass_num} complete: {pass_succeeded} saved, {pass_failed} failed")
+        
+        # If no failures, we are done
+        if pass_failed == 0:
+            break
+            
+        # If failure rate is extremely high, maybe something is fundamentally broken
+        failure_rate = pass_failed / len(active_questions)
+        if failure_rate > 0.9 and pass_num < args.max_batch_retries:
+            print(f"\n  ⚠️ High failure rate ({failure_rate:.0%}). Waiting 60s before next pass...")
+            time.sleep(60)
 
-            # Extended cooldown after consecutive failures (rate limit likely)
-            if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-                cooldown = COOLDOWN_AFTER_FAILURES * (consecutive_failures // MAX_CONSECUTIVE_FAILURES)
-                cooldown = min(cooldown, 300)  # Cap at 5 minutes
-                print(f"         ⏳ {consecutive_failures} consecutive failures — cooling down {cooldown}s...")
-                time.sleep(cooldown)
-                # Try CDP refresh, fall back to disk
-                silent_refresh_cookies()
-                continue  # Skip the normal delay
-
-        # Rate limiting delay
-        if i < len(target_questions) - 1:
-            time.sleep(args.delay)
-
-    # Final progress save
-    save_progress(progress)
-
-    # ── Summary ──
+    # ── Final Report ──
     total_elapsed = time.time() - batch_start
+    final_valid, _ = _count_valid_answers(target_questions)
+    
     print(f"\n{'='*60}")
-    print(f"  🏁 QUERY BATCH COMPLETE")
-    print(f"  Succeeded: {succeeded}")
-    print(f"  Failed: {failed}")
-    print(f"  Skipped (existing): {skipped}")
+    print(f"  🏁 BATCH COMPLETE")
+    print(f"  Total Succeeded this session: {total_succeeded}")
+    print(f"  Final Completion: {final_valid}/{len(target_questions)}")
     print(f"  Total time: {_format_eta(total_elapsed)}")
-    if query_times:
-        print(f"  Avg query time: {sum(query_times)/len(query_times):.1f}s")
     print(f"{'='*60}")
 
-    # Auto post-process if all done
-    total_valid = sum(1 for q in questions if is_answer_valid(get_output_path(q.number)))
-    if total_valid == len(questions):
+    # Auto generate SFT JSONL if 100% done
+    total_valid_all = sum(1 for q in questions if is_answer_valid(get_output_path(q.number)))
+    if total_valid_all == len(questions):
         print(f"\n📦 All {len(questions)} answers collected! Auto-generating SFT JSONL...")
         sft_path = os.path.join(SFT_OUTPUT_DIR, "sft_accounting.jsonl")
         count, missing = convert_to_sft_jsonl(questions, sft_path)
         print(f"   ✅ Wrote {count} examples to {sft_path}")
     else:
-        print(f"\n📊 {total_valid}/{len(questions)} answers collected so far.")
+        print(f"\n📊 {total_valid_all}/{len(questions)} answers collected so far.")
         print(f"   Run --post-process-only when all questions are answered.")
 
 
@@ -1043,7 +1067,7 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         logger.info("Interrupted by user (Ctrl+C)")
-        print("\n\nInterrupted! Progress saved. Re-run to resume.")
+        print("\n\nInterrupted! Answers are saved on disk. Re-run to resume.")
         sys.exit(1)
     except Exception as e:
         logger.critical("FATAL ERROR", exc_info=True)

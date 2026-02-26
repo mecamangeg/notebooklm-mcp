@@ -1,0 +1,205 @@
+{
+  "agent___deprecated__badges.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3554265,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent___deprecated__badges.md",
+    "content_hash": "5c11f09e6518c789aafb980b182b40a2",
+    "format_version": 2
+  },
+  "agent___deprecated__byte-offset.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.358236,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent___deprecated__byte-offset.md",
+    "content_hash": "dee7e9c0a1f400510be9f1eb9982dcf4",
+    "format_version": 2
+  },
+  "agent___deprecated__check-grounding.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3603172,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent___deprecated__check-grounding.md",
+    "content_hash": "c7fb35b830bcdcb2b5e4e72f73aa02a5",
+    "format_version": 2
+  },
+  "agent___deprecated__classifier.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3624313,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent___deprecated__classifier.md",
+    "content_hash": "58caa030685da1c62456efbdffd85bbb",
+    "format_version": 2
+  },
+  "agent___deprecated__constitution.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3655508,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent___deprecated__constitution.md",
+    "content_hash": "15fce3647a485acb1718e378179d1679",
+    "format_version": 2
+  },
+  "agent___deprecated__fast-lane.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3676038,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent___deprecated__fast-lane.md",
+    "content_hash": "72b334d3c87a5a7241d452bc3e1ea237",
+    "format_version": 2
+  },
+  "agent___deprecated__formats__index.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3696072,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent___deprecated__formats__index.md",
+    "content_hash": "a9eaa8f24f298bddf202a3f9a5774bfc",
+    "format_version": 2
+  },
+  "agent___deprecated__implementations.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.370945,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent___deprecated__implementations.md",
+    "content_hash": "fcd8e71e65156d002d8f531a24d58ffa",
+    "format_version": 2
+  },
+  "agent___deprecated__paralegal.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3736298,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent___deprecated__paralegal.md",
+    "content_hash": "1d96ffaec3298029e64d4d7dd3bc8bcc",
+    "format_version": 2
+  },
+  "agent___deprecated__partner.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.375634,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent___deprecated__partner.md",
+    "content_hash": "747e36ae77421a752683ccd79a746cc7",
+    "format_version": 2
+  },
+  "agent___deprecated__runner.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3781416,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent___deprecated__runner.md",
+    "content_hash": "5f3573bdb582e5f673f8e4a3555c0806",
+    "format_version": 2
+  },
+  "agent___deprecated__templates.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3801897,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent___deprecated__templates.md",
+    "content_hash": "e5f4a4525d9a925549476fa028ac3c64",
+    "format_version": 2
+  },
+  "agent___deprecated__tools.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3832362,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent___deprecated__tools.md",
+    "content_hash": "7b37e432b89de720322f54f1144e1e7f",
+    "format_version": 2
+  },
+  "agent__classifier.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3849263,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent__classifier.md",
+    "content_hash": "26ae8fc88bed33abdd601d48a8286899",
+    "format_version": 2
+  },
+  "agent__orchestrator.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.38744,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent__orchestrator.md",
+    "content_hash": "ebeffd108843e94ad53ea2c8b9888291",
+    "format_version": 2
+  },
+  "agent__prompt-assembler.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3898938,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent__prompt-assembler.md",
+    "content_hash": "6e69d7e47a0702784eb8c11f0c05d673",
+    "format_version": 2
+  },
+  "agent__prompt-templates.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3926115,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent__prompt-templates.md",
+    "content_hash": "2b4531efd45cad18476faa1cf4350410",
+    "format_version": 2
+  },
+  "agent__response-formatter.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3946755,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent__response-formatter.md",
+    "content_hash": "4066e52bc24068c061f2cd541c2ed4e7",
+    "format_version": 2
+  },
+  "agent__tool-registry.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.3967235,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent__tool-registry.md",
+    "content_hash": "cfe390d5cfdae359faec8fb640d3f1e5",
+    "format_version": 2
+  },
+  "agent__types.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.399775,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent__types.md",
+    "content_hash": "d93556545d8105aba3f59c8c28138127",
+    "format_version": 2
+  },
+  "agent__unified-engine.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.402091,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\agent__unified-engine.md",
+    "content_hash": "fbf11c3020d15aeb119dceb621d7f76a",
+    "format_version": 2
+  },
+  "env.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.4040897,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\env.md",
+    "content_hash": "489e354cddd420f6d6c1425eb78d5f2c",
+    "format_version": 2
+  },
+  "generation__model-adapter.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.4062605,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\generation__model-adapter.md",
+    "content_hash": "a447268c79f43661b52cccf8f3b37673",
+    "format_version": 2
+  },
+  "generation__model-config.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.4087687,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\generation__model-config.md",
+    "content_hash": "ba41596dbe9b54eb17813b2c4e0d778f",
+    "format_version": 2
+  },
+  "index.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.4102936,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\index.md",
+    "content_hash": "53b88a8acb669db4d800defb1fcf813e",
+    "format_version": 2
+  },
+  "retrieval__search-retriever.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.4138072,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\retrieval__search-retriever.md",
+    "content_hash": "a215d67e62246e3980eb9cd96b13a74c",
+    "format_version": 2
+  },
+  "search__vertex-provider.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.4163556,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\search__vertex-provider.md",
+    "content_hash": "df3e38e47e8d0039f9e86ea11c8c37a8",
+    "format_version": 2
+  },
+  "validation__byte-offset.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.4178612,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\validation__byte-offset.md",
+    "content_hash": "488a02e79092884412591f3d4fda9680",
+    "format_version": 2
+  },
+  "validation__check-grounding.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772114795.420885,
+    "md_path": "ANGULAR-RAG-FUNCTIONS\\validation__check-grounding.md",
+    "content_hash": "7de3e9dc2ce8e8d0fce6168a55bfdc35",
+    "format_version": 2
+  }
+}

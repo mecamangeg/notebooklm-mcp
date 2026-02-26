@@ -1,0 +1,282 @@
+{
+  "app.config.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.110022,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\app.config.md",
+    "content_hash": "0b0608c075567f124e14e5b294b55abd",
+    "format_version": 2
+  },
+  "app.config.server.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1125653,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\app.config.server.md",
+    "content_hash": "4fdc43c32933ec73fc725ecf2dfc5fe0",
+    "format_version": 2
+  },
+  "app.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1145644,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\app.md",
+    "content_hash": "db483476d4c09af94263e1a092b63168",
+    "format_version": 2
+  },
+  "app.routes.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1170683,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\app.routes.md",
+    "content_hash": "5d79ae56a041a6c374ea5a3e45510ec7",
+    "format_version": 2
+  },
+  "app.routes.server.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1185763,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\app.routes.server.md",
+    "content_hash": "5935d54f2b8a4f0d7fc4c7c7950241a9",
+    "format_version": 2
+  },
+  "components__auth__login.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1210802,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__auth__login.md",
+    "content_hash": "7496071c36e2688dea4019ade10fd552",
+    "format_version": 2
+  },
+  "components__chat__chat-area.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1225877,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__chat-area.md",
+    "content_hash": "7afa40ab2b37f6f1f8ce8b7ba083bf73",
+    "format_version": 2
+  },
+  "components__chat__citation-link.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1250913,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__citation-link.md",
+    "content_hash": "4284c8457bb86a420685cb0c10750bd2",
+    "format_version": 2
+  },
+  "components__chat__grounding-badge.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.12715,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__grounding-badge.md",
+    "content_hash": "7c4da953749557a67ee6ae984cd92798",
+    "format_version": 2
+  },
+  "components__chat__message-bubble.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1286552,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__message-bubble.md",
+    "content_hash": "403f4a01b6c659e26bf0bf422026e27a",
+    "format_version": 2
+  },
+  "components__chat__parsed-content.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1316638,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__parsed-content.md",
+    "content_hash": "0b8a9130f13b2447156ace4854ed50d1",
+    "format_version": 2
+  },
+  "components__chat__pipeline-debug-panel.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1331763,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__pipeline-debug-panel.md",
+    "content_hash": "8e2a5766b5fc8d8149d47c5de79b34c9",
+    "format_version": 2
+  },
+  "components__chat__thinking-indicator.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1351793,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__chat__thinking-indicator.md",
+    "content_hash": "c83aa7effd7ea2d1297636306855f5aa",
+    "format_version": 2
+  },
+  "components__citations-panel.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1366837,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__citations-panel.md",
+    "content_hash": "6de99300977578108b58fd4da3eec43e",
+    "format_version": 2
+  },
+  "components__document-viewer.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1397078,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__document-viewer.md",
+    "content_hash": "362e2a72ae2b7e6ca42fd492433c87bf",
+    "format_version": 2
+  },
+  "components__nav-panel.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1422102,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__nav-panel.md",
+    "content_hash": "f7feb7f5ce23c9c71dd5df0b07ce0621",
+    "format_version": 2
+  },
+  "components__research-indicator.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.143751,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__research-indicator.md",
+    "content_hash": "3218c1a1855ea7cc6a35278a23e69a17",
+    "format_version": 2
+  },
+  "components__ui__glass-panel.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1462579,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__ui__glass-panel.md",
+    "content_hash": "b12da6b37cd9a6615071e795878e9a50",
+    "format_version": 2
+  },
+  "components__ui__template-switcher.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1487598,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\components__ui__template-switcher.md",
+    "content_hash": "2c1f98c6b4a192a495e922c559070112",
+    "format_version": 2
+  },
+  "config__agent-engine.config.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1502676,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\config__agent-engine.config.md",
+    "content_hash": "acea21b713c4808bf9470957c23bcd1d",
+    "format_version": 2
+  },
+  "environments__environment.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1527896,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\environments__environment.md",
+    "content_hash": "de45823cf6919f939df0203c0841ea70",
+    "format_version": 2
+  },
+  "environments__environment.prod.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1547925,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\environments__environment.prod.md",
+    "content_hash": "f64fe0d28ffb9da779b8ce63c9e13ece",
+    "format_version": 2
+  },
+  "index.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.157296,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\index.md",
+    "content_hash": "32ce335264669b9877a9cbc3fbd5b1f3",
+    "format_version": 2
+  },
+  "main.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1598418,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\main.md",
+    "content_hash": "2c6d0d60cb6de769e43109e15826bdf4",
+    "format_version": 2
+  },
+  "main.server.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1608415,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\main.server.md",
+    "content_hash": "214d4972752bbb991cf517c28a3483d2",
+    "format_version": 2
+  },
+  "models__agent-engine.types.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1638415,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\models__agent-engine.types.md",
+    "content_hash": "b3c83249a2eeb9fc41dc75293d9aa122",
+    "format_version": 2
+  },
+  "models__types.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1658413,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\models__types.md",
+    "content_hash": "34b7f78d2ca20e314a640e9747f54d00",
+    "format_version": 2
+  },
+  "pipes__truncate-snippet.pipe.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1673472,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\pipes__truncate-snippet.pipe.md",
+    "content_hash": "3e68e2b7d0395676915b62945917ccb9",
+    "format_version": 2
+  },
+  "server.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1693556,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\server.md",
+    "content_hash": "fa2d5a522ae808e3af3c2929f8cfe24a",
+    "format_version": 2
+  },
+  "services__agent-engine.service.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1713588,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__agent-engine.service.md",
+    "content_hash": "798bf9d86a9212eae5909f3dd3612920",
+    "format_version": 2
+  },
+  "services__auth.service.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1733942,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__auth.service.md",
+    "content_hash": "15153a5e60c42ca3b85fe82b06c606db",
+    "format_version": 2
+  },
+  "services__chat.service.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.176443,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__chat.service.md",
+    "content_hash": "fc5b3466d010c2b1a7fecdbb4b9646ac",
+    "format_version": 2
+  },
+  "services__document-viewer.service.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1779456,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__document-viewer.service.md",
+    "content_hash": "8446a179863c04bf13ed8ca0a0c44e69",
+    "format_version": 2
+  },
+  "services__grounding-audit.service.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1809604,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__grounding-audit.service.md",
+    "content_hash": "2c9b642b07c1a9a60865957f3063267e",
+    "format_version": 2
+  },
+  "services__session.service.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.182973,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__session.service.md",
+    "content_hash": "64e67232fa94500d4e95914f15734f02",
+    "format_version": 2
+  },
+  "services__stream.service.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.184976,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__stream.service.md",
+    "content_hash": "f97cce07b26d67292f45834eeb694463",
+    "format_version": 2
+  },
+  "services__template.service.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.187976,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\services__template.service.md",
+    "content_hash": "7c793624e6c94fade49012d3f769aa72",
+    "format_version": 2
+  },
+  "styles.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1905117,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\styles.md",
+    "content_hash": "ce102bf1fba6bbf56b1a7c174fa7f644",
+    "format_version": 2
+  },
+  "utils__citation-extractor.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1930175,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\utils__citation-extractor.md",
+    "content_hash": "e96748c3ed4b0dc619b9ee696d432d56",
+    "format_version": 2
+  },
+  "utils__document-beautifier.md": {
+    "source_id": "batch-unknown",
+    "uploaded_at": 1772108766.1950247,
+    "md_path": "C:\\PROJECTS\\notebooklm-mcp\\ANGULAR-RAG-SOURCES\\utils__document-beautifier.md",
+    "content_hash": "16eeb29bbf2b225e5c4302e255faaad1",
+    "format_version": 2
+  }
+}

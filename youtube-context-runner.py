@@ -68,8 +68,8 @@ os.environ.setdefault("NOTEBOOKLM_BL", "boq_labs-tailwind-frontend_20260212.13_p
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════
 
-# Default output root (relative to this script's directory)
-DEFAULT_OUTPUT_ROOT = os.path.join(os.path.dirname(__file__), "YOUTUBE-CONTEXTS")
+# Default output root
+DEFAULT_OUTPUT_ROOT = r"C:\PROJECTS\youtube-context-extractor\output"
 
 # Designated NotebookLM notebook for YouTube context extraction
 DEFAULT_NOTEBOOK_ID = "a7d3b9c8-f255-4442-834d-e0bbbe30ec8f"
@@ -228,9 +228,38 @@ EXTRACTION_QUERIES = [
 
 _last_refresh_time = None
 
+# CDP ports to probe, in priority order.
+# Antigravity IDE uses port 9000 (Electron/CDP for auto-accept extension).
+# Chrome for NotebookLM auth should run on 9222 (default) or 9223 (legacy fallback).
+_CDP_PROBE_PORTS = [9222, 9223, 9000]
 
-def silent_refresh_cookies():
-    """Re-extract cookies from Chrome via CDP and update the auth cache."""
+
+def _find_notebooklm_chrome_page(probe_ports=None):
+    """Try each CDP port in order and return (port, page_dict) for the first
+    port that has a NotebookLM page open, or (None, None) if none found."""
+    from notebooklm_mcp.auth_cli import get_chrome_pages
+
+    for port in (probe_ports or _CDP_PROBE_PORTS):
+        try:
+            pages = get_chrome_pages(port)
+            for page in pages:
+                if "notebooklm.google.com" in page.get("url", ""):
+                    return port, page
+        except Exception:
+            pass
+    return None, None
+
+
+def silent_refresh_cookies(cdp_port: int | None = None, auto_launch: bool = True):
+    """Re-extract cookies from Chrome via CDP and update the auth cache.
+
+    Args:
+        cdp_port: Explicit CDP port to use. If None, probes ports in
+                  _CDP_PROBE_PORTS order (9222, 9223, 9000).
+        auto_launch: If True and no Chrome page is found, attempt to
+                     auto-launch Chrome with the persistent notebooklm
+                     profile and wait briefly for it to open.
+    """
     global _last_refresh_time
 
     try:
@@ -238,6 +267,7 @@ def silent_refresh_cookies():
             get_chrome_pages,
             get_page_cookies,
             get_page_html,
+            launch_chrome,
             CDP_DEFAULT_PORT,
         )
         from notebooklm_mcp.auth import (
@@ -247,15 +277,40 @@ def silent_refresh_cookies():
             validate_cookies,
         )
 
-        pages = get_chrome_pages(CDP_DEFAULT_PORT)
-        nb_page = None
-        for page in pages:
-            if "notebooklm.google.com" in page.get("url", ""):
-                nb_page = page
-                break
+        # Determine which ports to probe
+        if cdp_port is not None:
+            probe_ports = [cdp_port]
+        else:
+            probe_ports = _CDP_PROBE_PORTS
 
-        if not nb_page:
-            print("  [auto-refresh] No NotebookLM page found in Chrome", file=sys.stderr)
+        found_port, nb_page = _find_notebooklm_chrome_page(probe_ports)
+
+        if nb_page is None and auto_launch:
+            # No Chrome with a NotebookLM page found — try to auto-launch
+            target_port = cdp_port or CDP_DEFAULT_PORT  # 9222
+            print(f"  [auto-refresh] No NotebookLM page found on ports {probe_ports}", file=sys.stderr)
+            print(f"  [auto-refresh] Auto-launching Chrome on port {target_port}...", file=sys.stderr)
+            try:
+                from notebooklm_mcp.auth_cli import find_or_create_notebooklm_page
+                launch_chrome(target_port, headless=False)
+                time.sleep(5)  # Give Chrome time to open
+                # Re-probe after launch
+                found_port, nb_page = _find_notebooklm_chrome_page([target_port])
+                if nb_page is None:
+                    # Chrome opened but no NB page yet — try to navigate
+                    nb_page = find_or_create_notebooklm_page(target_port)
+                    if nb_page:
+                        found_port = target_port
+                        time.sleep(4)  # Wait for NB page to load session
+            except Exception as launch_err:
+                logger.warning("[auto-refresh] Chrome launch failed: %s", launch_err)
+
+        if nb_page is None:
+            print(
+                f"  [auto-refresh] ⚠️  No NotebookLM page found on any Chrome instance.\n"
+                f"  [auto-refresh]    Open Chrome at https://notebooklm.google.com and try again.",
+                file=sys.stderr,
+            )
             return False
 
         ws_url = nb_page.get("webSocketDebuggerUrl")
@@ -267,7 +322,7 @@ def silent_refresh_cookies():
         cookies = {c["name"]: c["value"] for c in cookies_list}
 
         if not validate_cookies(cookies):
-            print("  [auto-refresh] Missing required cookies", file=sys.stderr)
+            print("  [auto-refresh] Missing required cookies — page may not be logged in", file=sys.stderr)
             return False
 
         html = get_page_html(ws_url)
@@ -288,7 +343,10 @@ def silent_refresh_cookies():
         server.reset_client()
 
         _last_refresh_time = time.time()
-        print(f"  [auto-refresh] ✅ Cookies refreshed ({len(cookies)} cookies, CSRF={'yes' if csrf_token else 'no'})")
+        print(
+            f"  [auto-refresh] ✅ Cookies refreshed from port {found_port} "
+            f"({len(cookies)} cookies, CSRF={'yes' if csrf_token else 'no'})"
+        )
         return True
 
     except Exception as e:
@@ -375,11 +433,55 @@ def extract_video_id(url: str) -> str | None:
     return None
 
 
-def make_safe_dir_name(text: str, max_len: int = 80) -> str:
-    """Convert arbitrary text to a safe directory name."""
-    safe = re.sub(r"[^\w\s-]", "", text)
-    safe = re.sub(r"[\s_]+", "-", safe).strip("-")
+def make_safe_filename(text: str, max_len: int = 120) -> str:
+    """Convert arbitrary text to a safe filename (no extension).
+
+    Preserves spaces, mixed case, and most printable characters.
+    Only strips characters that are illegal on Windows/macOS file systems.
+    """
+    # Remove filesystem-illegal chars: \ / : * ? " < > |
+    safe = re.sub(r'[\\/:*?"<>|]', "", text)
+    # Collapse runs of whitespace to a single space
+    safe = re.sub(r"\s+", " ", safe).strip()
     return safe[:max_len] or "youtube-video"
+
+
+def fetch_youtube_title(video_id: str) -> str:
+    """Fetch the human-readable title of a YouTube video.
+
+    Uses httpx to request the YouTube watch page and extracts the
+    og:title meta tag.  Falls back to the video ID if anything fails.
+    """
+    try:
+        import httpx
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        resp = httpx.get(url, headers=headers, timeout=10, follow_redirects=True)
+        # Primary: <title> tag — always contains full title and is static HTML
+        m = re.search(r"<title>(.+?)</title>", resp.text, re.DOTALL)
+        if m:
+            title = m.group(1).replace(" - YouTube", "").strip()
+            title = title.replace("&amp;", "&").replace("&quot;", '"').replace("&#39;", "'").replace("&lt;", "<").replace("&gt;", ">")
+            title = re.sub(r"\s+", " ", title).strip()
+            if title and title != video_id:
+                return title
+        # Fallback: og:title meta tag
+        m = re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\'](.*?)["\']', resp.text)
+        if m:
+            title = m.group(1)
+            title = title.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"').replace("&#39;", "'")
+            return re.sub(r"\s+", " ", title).strip()
+    except Exception as e:
+        logger.warning("Could not fetch YouTube title for %s: %s", video_id, e)
+
+    return video_id  # Last resort: use the video ID as title
 
 
 def fetch_youtube_transcript(video_id: str, youtube_url: str) -> dict:
@@ -815,6 +917,13 @@ def main():
         help="Skip the initial cookie refresh (use cached cookies as-is)"
     )
     parser.add_argument(
+        "--cdp-port", type=int, default=None,
+        help=(
+            "Chrome DevTools Protocol port where NotebookLM is open "
+            "(default: auto-probe 9222, 9223, 9000 in order)"
+        )
+    )
+    parser.add_argument(
         "--force", action="store_true",
         help="Re-extract even if a valid output file already exists"
     )
@@ -837,7 +946,7 @@ def main():
     # ── Initial cookie refresh ──
     if not args.no_cookie_refresh:
         print("Performing initial cookie refresh...")
-        if silent_refresh_cookies():
+        if silent_refresh_cookies(cdp_port=args.cdp_port, auto_launch=True):
             print("✅ Starting with fresh cookies.\n")
         else:
             print("⚠️  Could not refresh from Chrome — using cached cookies.\n")
@@ -860,15 +969,45 @@ def main():
     if args.output_file:
         output_path = args.output_file
     else:
-        # Use video ID as dir name; we'll update it to the source title after ingestion
-        out_dir = os.path.join(args.output_dir, video_id)
-        output_path = os.path.join(out_dir, "context-extraction.md")
+        # Fetch the real video title to name the output file
+        print("  📌 Fetching video title...")
+        video_title = fetch_youtube_title(video_id)
+        safe_name = make_safe_filename(video_title)
+        print(f"  📌 Title: {video_title}")
+        os.makedirs(args.output_dir, exist_ok=True)
+        output_path = os.path.join(args.output_dir, f"{safe_name}.md")
 
     # ── Skip if already extracted (and --force not set) ──
-    if not args.force and is_extraction_valid(output_path):
-        print(f"✅ Already extracted (content-validated): {output_path}")
-        print("   Use --force to re-extract.")
-        sys.exit(0)
+    # For title-based filenames we also scan the OUTPUT dir for any existing
+    # file that embeds the video ID in its content header (handles renames).
+    def _find_existing_extraction(out_dir: str, vid_id: str) -> str | None:
+        """Scan out_dir for a .md file whose header contains this video ID."""
+        try:
+            for f in os.listdir(out_dir):
+                if not f.endswith(".md"):
+                    continue
+                fpath = os.path.join(out_dir, f)
+                with open(fpath, "r", encoding="utf-8", errors="ignore") as fp:
+                    head = fp.read(1024)  # Only check the header block
+                if vid_id in head:
+                    return fpath
+        except Exception:
+            pass
+        return None
+
+    if not args.force:
+        # Check the resolved output path first
+        if is_extraction_valid(output_path):
+            print(f"✅ Already extracted (content-validated): {output_path}")
+            print("   Use --force to re-extract.")
+            sys.exit(0)
+        # Also scan the output dir for any title-named file containing this video ID
+        if not args.output_file:
+            existing = _find_existing_extraction(args.output_dir, video_id)
+            if existing and is_extraction_valid(existing):
+                print(f"✅ Already extracted as: {existing}")
+                print("   Use --force to re-extract.")
+                sys.exit(0)
 
     # ── Run extraction ──
     start_time = time.time()

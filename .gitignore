@@ -59,3 +59,14 @@ CLAUDE.local.md
 
 # Case digest data (large, not tracked)
 2013/
+
+# ----------------------------------------------------------
+# Generated syllabi output (large, not source)
+# ----------------------------------------------------------
+with-generated-SYLLABI/
+cases with all different opinions with native syllabi/
+actually_missing_files.json
+
+# YouTube context extraction outputs (large generated files)
+OUTPUT/
+YOUTUBE-CONTEXTS/
